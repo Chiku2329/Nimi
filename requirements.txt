@@ -1,0 +1,8 @@
+chainlit
+openai
+pypdf
+ddgs
+aiosqlite
+sqlalchemy
+greenlet
+httpx
