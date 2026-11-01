@@ -1,6 +1,10 @@
+import os
 import sqlite3
 
-con = sqlite3.connect("chat.db")
+DATA_DIR = os.environ.get("DATA_DIR", ".")
+os.makedirs(DATA_DIR, exist_ok=True)
+
+con = sqlite3.connect(os.path.join(DATA_DIR, "chat.db"))
 con.executescript("""
 CREATE TABLE IF NOT EXISTS users (
     "id" TEXT PRIMARY KEY,
