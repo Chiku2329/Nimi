@@ -26,7 +26,21 @@ MODELS = ["gemini-flash-lite-latest", "gemini-flash-latest"]
 MAX_FILE_CHARS = 30000
 MAX_HISTORY = 20
 MAX_TOOL_ROUNDS = 3
-DATA_DIR = os.environ.get("DATA_DIR", ".")
+def pick_data_dir():
+    wanted = os.environ.get("DATA_DIR", ".")
+    try:
+        os.makedirs(wanted, exist_ok=True)
+        test_file = os.path.join(wanted, ".write_test")
+        with open(test_file, "w") as f:
+            f.write("ok")
+        os.remove(test_file)
+        return wanted
+    except Exception:
+        return "."
+
+
+DATA_DIR = pick_data_dir()
+print("Data folder:", DATA_DIR, flush=True)
 MEMORY_FILE = os.path.join(DATA_DIR, "memory.json")
 
 BASE_PROMPT = """You are Nimi, a helpful, friendly and knowledgeable assistant.
