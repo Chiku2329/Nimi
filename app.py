@@ -5,7 +5,8 @@ import json
 import math
 import operator
 import os
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 import chainlit as cl
 import httpx
@@ -236,7 +237,14 @@ def forget(keyword: str):
     set_memories(kept)
     return f"Removed {len(items) - len(kept)} item(s)."
 
-
+def get_time(timezone_name: str):
+    zone = ZoneInfo(timezone_name)
+    now = datetime.now(timezone.utc).astimezone(zone)
+    offset = now.strftime("%z")
+    return (
+        now.strftime("%A, %d %B %Y, %I:%M %p")
+        + " (" + timezone_name + ", UTC" + offset[:3] + ":" + offset[3:] + ")"
+    )
 def fn(name, description, props, required):
     return {
         "type": "function",
@@ -259,7 +267,9 @@ TOOLS = [
        {"fact": {"type": "string"}}, ["fact"]),
     fn("forget", "Delete saved memories containing a keyword.",
        {"keyword": {"type": "string"}}, ["keyword"]),
-]
+    fn("get_time", "Get the current date and time in any place, using an IANA time zone name such as America/Toronto, Europe/London or Asia/Karachi.",
+       {"timezone_name": {"type": "string"}}, ["timezone_name"]),
+        ]
 
 
 async def run_tool(name, args):
@@ -274,9 +284,11 @@ async def run_tool(name, args):
             return remember(args["fact"])
         if name == "forget":
             return forget(args["keyword"])
-        return f"Unknown tool: {name}"
-    except Exception as e:
-        return f"Tool error: {e}"
+        if name == "get_time":
+            return get_time(args["timezone_name"])
+            return f"Unknown tool: {name}"
+        except Exception as e:
+            return f"Tool error: {e}"
 
 
 # ---------- helpers ----------
@@ -286,7 +298,7 @@ def build_system_prompt():
     parts = [
         BASE_PROMPT,
         PROFILES.get(profile, {}).get("prompt", ""),
-        f"Current date and time: {datetime.now().strftime('%A, %d %B %Y, %H:%M')} (user's local time).",
+               "Current time: " + get_time(os.environ.get("USER_TZ", "Asia/Karachi")) + ". For the time in any other place, call get_time with the correct IANA time zone; never guess time zones or daylight saving.",
     ]
     mem = get_memories()
     if mem:
