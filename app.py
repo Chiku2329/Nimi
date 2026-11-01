@@ -90,8 +90,20 @@ def init_data_layer():
 
 @cl.password_auth_callback
 def auth(username: str, password: str):
-    if (username, password) == (os.environ["APP_USERNAME"], os.environ["APP_PASSWORD"]):
-        return cl.User(identifier=username, metadata={"role": "user"})
+    expected_user = os.environ.get("APP_USERNAME", "").strip()
+    expected_pass = os.environ.get("APP_PASSWORD", "").strip()
+    print(
+        "login attempt: typed user len=%d, typed pass len=%d, saved user len=%d, saved pass len=%d"
+        % (len(username), len(password), len(expected_user), len(expected_pass)),
+        flush=True,
+    )
+    if (
+        expected_user
+        and expected_pass
+        and username.strip() == expected_user
+        and password.strip() == expected_pass
+    ):
+        return cl.User(identifier=username.strip(), metadata={"role": "user"})
     return None
 
 
