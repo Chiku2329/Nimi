@@ -20,4 +20,6 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/chiku2329/nimi:latest
+                   tags: |
+            ghcr.io/chiku2329/nimi:latest
+            ghcr.io/chiku2329/nimi:v2
