@@ -93,11 +93,6 @@ def init_data_layer():
 def auth(username: str, password: str):
     expected_user = os.environ.get("APP_USERNAME", "").strip()
     expected_pass = os.environ.get("APP_PASSWORD", "").strip()
-    print(
-        "login attempt: typed user len=%d, typed pass len=%d, saved user len=%d, saved pass len=%d"
-        % (len(username), len(password), len(expected_user), len(expected_pass)),
-        flush=True,
-    )
     if (
         expected_user
         and expected_pass
