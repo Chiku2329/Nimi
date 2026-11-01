@@ -6,3 +6,4 @@ aiosqlite
 sqlalchemy
 greenlet
 httpx
+tzdata
