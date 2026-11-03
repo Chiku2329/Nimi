@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 545" role="img" aria-labelledby="title desc">
+<title id="title">Nimi — One AI. Infinite Possibilities.</title><desc id="desc">Metallic infinity symbol above the Nimi wordmark.</desc>
+<defs><linearGradient id="metal" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#77768f"/><stop offset=".32" stop-color="#eeeef1"/><stop offset=".68" stop-color="#d8c6a8"/><stop offset="1" stop-color="#8c86a5"/></linearGradient><filter id="glow"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+<rect width="1000" height="545" rx="28" fill="#0c0e14"/>
+<path d="M250 170 C250 60 410 55 500 170 C590 285 750 280 750 170 C750 60 590 55 500 170 C410 285 250 280 250 170" fill="none" stroke="url(#metal)" stroke-width="43" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+<text x="500" y="390" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="150" font-weight="300" letter-spacing="12" fill="#f4f0e8">nimi</text>
+<text x="500" y="445" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="27" letter-spacing="4" fill="#aaa7b0">ONE AI. INFINITE POSSIBILITIES.</text>
+</svg>

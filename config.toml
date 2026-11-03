@@ -1,59 +1,26 @@
-
+# Active Chainlit configuration is .chainlit/config.toml.
 [project]
-# List of environment variables to be provided by each user to use the app.
 user_env = []
-
-# Duration (in seconds) during which the session is saved when the connection is lost
 session_timeout = 3600
-
-# Duration (in seconds) of the user session expiry
-user_session_timeout = 1296000  # 15 days
-
-# Enable third parties caching (e.g., LangChain cache)
+user_session_timeout = 1296000
 cache = false
-
-# Whether to persist user environment variables (API keys) to the database
 persist_user_env = false
-
-# Whether to mask user environment variables in the UI
 mask_user_env = false
-
-# Authorized origins
 allow_origins = ["*"]
 
-
 [features]
-# Process and display HTML in messages
 unsafe_allow_html = false
-
-# Process and display mathematical expressions
 latex = false
-
-# Enable rendering of user messages markdown
 user_message_markdown = true
-
-# Autoscroll new user messages
 user_message_autoscroll = true
-
-# Autoscroll new assistant messages
 assistant_message_autoscroll = true
-
-# Automatically tag threads with the current chat profile
 auto_tag_thread = true
-
-# Allow users to edit their own messages
 edit_message = true
-
-# Allow users to share threads
 allow_thread_sharing = false
-
-# Enable favorite messages
 favorites = false
-
 
 [features.slack]
 reaction_on_message_received = false
-
 
 [features.spontaneous_file_upload]
 enabled = true
@@ -61,82 +28,27 @@ accept = ["*/*"]
 max_files = 20
 max_size_mb = 500
 
-
 [features.audio]
 enabled = false
 sample_rate = 24000
 
-
 [features.mcp]
 enabled = false
-
 
 [features.mcp.user_servers]
 enabled = false
 allowed_urls = []
 
-
 [UI]
 name = "Nimi"
+description = "Nimi - One AI. Infinite Possibilities."
 custom_js = "/public/pwa.js"
-logo_file_url = "/public/logo_dark.png"
-
-# Default theme
-# default_theme = "dark"
-
-# Force a specific language
-# language = "en-US"
-
-# layout = "wide"
-
-# default_sidebar_state = "open"
-
-# Chat settings display location
-# chat_settings_location = "message_composer"
-
-# Default state of chat settings sidebar
-# default_chat_settings_open = false
-
-# Whether to prompt user confirmation on clicking New Chat
+logo_file_url = "/public/nimi-logo.svg"
+custom_meta_image_url = "/public/nimi-logo.svg"
 confirm_new_chat = true
-
-# Description of the assistant
-# description = ""
-
-# Chain of Thought display mode
 cot = "full"
-
-# Custom CSS file
-# custom_css = "/public/test.css"
-
-# Custom CSS attributes
-# custom_css_attributes = "media=\"print\""
-
-# Custom JavaScript attributes
-# custom_js_attributes = "async type = \"module\""
-
-# Custom login page image
-# login_page_image = "/public/custom-background.jpg"
-
-# Custom login page image filter
-# login_page_image_filter = "brightness-50 grayscale"
-# login_page_image_dark_filter = "contrast-200 blur-sm"
-
-# Custom meta URL
-# custom_meta_url = "https://github.com/Chainlit/chainlit"
-
-# Custom meta image URL
-# custom_meta_image_url = "https://chainlit-cloud.s3.eu-west-3.amazonaws.com/logo/chainlit_banner.png"
-
-# Load assistant avatar image
+alert_style = "classic"
 default_avatar_file_url = ""
-
-# Avatar size
-# avatar_size = 20
-
-# Custom frontend build directory
-# custom_build = "./public/build"
-
 
 [meta]
 generated_by = "2.12.0"
