@@ -3,11 +3,17 @@
   "name": "Nimi - One AI. Infinite Possibilities.",
   "icons": [
     {
-      "src": "favicon.png.jpg",
-      "type": "image/jpeg",
+      "src": "https://ibb.co",
+      "type": "image/png",
+      "sizes": "512x512"
+    },
+    {
+      "src": "https://ibb.co",
+      "type": "image/png",
       "sizes": "192x192"
     }
   ],
   "start_url": "/",
-  "display": "standalone"
+  "display": "standalone",
+  "orientation": "portrait"
 }
