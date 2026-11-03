@@ -113,9 +113,11 @@ reaction_on_message_received = false
         allowed_urls = []
 
 [UI]
+[UI]
 name = "Nimi"
-logo_dark = "icon-192.png"
-logo_light = "icon-192.png"
+logo_dark = "icon-192.png.jpg"
+logo_light = "icon-192.png.jpg"
+
 
 # default_theme = "dark"
 
