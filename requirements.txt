@@ -7,3 +7,5 @@ sqlalchemy
 greenlet
 httpx
 tzdata
+asyncpg
+psycopg2-binary
