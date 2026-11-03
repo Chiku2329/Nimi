@@ -5,6 +5,9 @@ import json
 import math
 import operator
 import os
+import hashlib
+import hmac
+import re
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -115,20 +118,6 @@ def init_data_layer():
     if url:
         return SQLAlchemyDataLayer(conninfo=url)
     return SQLAlchemyDataLayer(conninfo=f"sqlite+aiosqlite:///{DATA_DIR}/chat.db")
-
-
-@cl.password_auth_callback
-def auth(username: str, password: str):
-    expected_user = os.environ.get("APP_USERNAME", "").strip()
-    expected_pass = os.environ.get("APP_PASSWORD", "").strip()
-    if (
-        expected_user
-        and expected_pass
-        and username.strip() == expected_user
-        and password.strip() == expected_pass
-    ):
-        return cl.User(identifier=username.strip(), metadata={"role": "user"})
-    return None
 
 
 @cl.set_chat_profiles
