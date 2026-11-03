@@ -1,24 +1,21 @@
 {
-  "name": "Nimi",
   "short_name": "Nimi",
-  "description": "Nimi - your AI assistant",
-  "start_url": "/",
-  "scope": "/",
-  "display": "standalone",
-  "background_color": "#1f1f1f",
-  "theme_color": "#4f46e5",
+  "name": "Nimi - One AI. Infinite Possibilities.",
   "icons": [
     {
-      "src": "/public/icon-192.png",
-      "sizes": "192x192",
+      "src": "icon-192.png",
       "type": "image/png",
-      "purpose": "any maskable"
+      "sizes": "192x192"
     },
     {
-      "src": "/public/icon-512.png",
-      "sizes": "512x512",
+      "src": "icon-512.png",
       "type": "image/png",
-      "purpose": "any maskable"
+      "sizes": "512x512"
     }
-  ]
+  ],
+  "start_url": "/",
+  "background_color": "#0B0F19",
+  "theme_color": "#0B0F19",
+  "display": "standalone",
+  "orientation": "portrait"
 }
