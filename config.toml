@@ -111,12 +111,10 @@ reaction_on_message_received = false
         # Allowlist of permitted URL prefixes. Empty list = deny all.
         # Example: allowed_urls = ["https://mcp.example.com"]
         allowed_urls = []
-
 [UI]
-name = "Nimi"
 logo_dark = "/public/logo_dark.png"
 logo_light = "/public/logo_light.png"
-
+custom_js = "/public/pwa.js"
 
 
 # default_theme = "dark"
