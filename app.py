@@ -481,9 +481,7 @@ async def start():
     cl.user_session.set("history", [])
     cl.user_session.set("titled", False)
     await cl.Message(
-        content="# Nimi - One AI. Infinite Possibilities.\n\nYour AI companion for thinking, creating, learning and exploring.\n\nHi! I'm Nimi. Ask me anything. You can attach images, PDFs or text files.\n\n"
-                "Commands: `/export` saves this chat, `/memory` shows what I remember, "
-                "`/clear-memory` erases it."
+        content="# Nimi - One AI. Infinite Possibilities.\n\nYour AI companion for thinking, creating, learning and exploring."
     ).send()
 
 
