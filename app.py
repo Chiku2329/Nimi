@@ -100,8 +100,20 @@ PROFILES = {
 
 # ---------- database and login ----------
 
+def pg_async_url():
+    url = os.environ.get("DATABASE_URL", "").strip()
+    if not url:
+        return None
+    url = url.replace("postgres://", "postgresql://", 1)
+    url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return url.split("?")[0]
+
+
 @cl.data_layer
 def init_data_layer():
+    url = pg_async_url()
+    if url:
+        return SQLAlchemyDataLayer(conninfo=url)
     return SQLAlchemyDataLayer(conninfo=f"sqlite+aiosqlite:///{DATA_DIR}/chat.db")
 
 
@@ -138,6 +150,11 @@ def user_key():
     return user.identifier if user else "default"
 
 
+def _pg_connect():
+    import psycopg2
+    return psycopg2.connect(os.environ["DATABASE_URL"])
+
+
 def load_all_memories():
     try:
         with open(MEMORY_FILE, "r", encoding="utf-8") as f:
@@ -147,10 +164,39 @@ def load_all_memories():
 
 
 def get_memories():
+    if os.environ.get("DATABASE_URL"):
+        try:
+            con = _pg_connect()
+            cur = con.cursor()
+            cur.execute(
+                "SELECT fact FROM nimi_memories WHERE user_key = %s ORDER BY id",
+                (user_key(),),
+            )
+            rows = [r[0] for r in cur.fetchall()]
+            con.close()
+            return rows
+        except Exception as e:
+            print("memory read error:", e, flush=True)
+            return []
     return load_all_memories().get(user_key(), [])
 
 
 def set_memories(items):
+    if os.environ.get("DATABASE_URL"):
+        try:
+            con = _pg_connect()
+            cur = con.cursor()
+            cur.execute("DELETE FROM nimi_memories WHERE user_key = %s", (user_key(),))
+            for fact in items:
+                cur.execute(
+                    "INSERT INTO nimi_memories (user_key, fact) VALUES (%s, %s)",
+                    (user_key(), fact),
+                )
+            con.commit()
+            con.close()
+        except Exception as e:
+            print("memory write error:", e, flush=True)
+        return
     data = load_all_memories()
     data[user_key()] = items
     with open(MEMORY_FILE, "w", encoding="utf-8") as f:
