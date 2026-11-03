@@ -1,19 +1,30 @@
 {
-  "short_name": "Nimi",
+  "id": "/",
   "name": "Nimi - One AI. Infinite Possibilities.",
+  "short_name": "Nimi",
+  "description": "One AI. Infinite Possibilities.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
+  "orientation": "any",
+  "theme_color": "#4f46e5",
+  "background_color": "#4f46e5",
   "icons": [
     {
-      "src": "https://ibb.co",
+      "src": "/public/icon-192.png",
       "type": "image/png",
-      "sizes": "512x512"
+      "sizes": "192x192",
+      "purpose": "any"
     },
     {
-      "src": "https://ibb.co",
+      "src": "/public/icon-512.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "512x512",
+      "purpose": "any"
     }
-  ],
-  "start_url": "/",
-  "display": "standalone",
-  "orientation": "portrait"
+  ]
 }
