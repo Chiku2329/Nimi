@@ -5,6 +5,9 @@ import json
 import math
 import operator
 import os
+import hashlib
+import hmac
+import re
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -117,18 +120,40 @@ def init_data_layer():
     return SQLAlchemyDataLayer(conninfo=f"sqlite+aiosqlite:///{DATA_DIR}/chat.db")
 
 
+def verify_password(password: str, encoded: str) -> bool:
+    """Verify a PBKDF2-SHA256 password hash stored in NIMI_USERS_JSON."""
+    try:
+        algorithm, rounds, salt, expected = encoded.split("$", 3)
+        if algorithm != "pbkdf2_sha256":
+            return False
+        iterations = int(rounds)
+        if iterations < 300_000 or iterations > 2_000_000:
+            return False
+        actual = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), bytes.fromhex(salt), iterations
+        ).hex()
+        return hmac.compare_digest(actual, expected)
+    except (ValueError, TypeError, UnicodeError):
+        return False
+
+
 @cl.password_auth_callback
 def auth(username: str, password: str):
-    expected_user = os.environ.get("APP_USERNAME", "").strip()
-    expected_pass = os.environ.get("APP_PASSWORD", "").strip()
-    if (
-        expected_user
-        and expected_pass
-        and username.strip() == expected_user
-        and password.strip() == expected_pass
-    ):
-        return cl.User(identifier=username.strip(), metadata={"role": "user"})
-    return None
+    # NIMI_USERS_JSON maps each allowed username to a PBKDF2-SHA256 hash.
+    # Fail closed: no configured users means nobody can sign in.
+    normalized = username.strip().lower()
+    if not normalized or len(normalized) > 64 or not re.fullmatch(r"[a-z0-9_.-]+", normalized):
+        return None
+    try:
+        users = json.loads(os.environ.get("NIMI_USERS_JSON", "{}"))
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if not isinstance(users, dict):
+        return None
+    encoded = users.get(normalized)
+    if not isinstance(encoded, str) or not verify_password(password, encoded):
+        return None
+    return cl.User(identifier=normalized, metadata={"role": "user"})
 
 
 @cl.set_chat_profiles
