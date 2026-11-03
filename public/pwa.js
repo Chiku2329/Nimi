@@ -1,42 +1,47 @@
 (function () {
   "use strict";
-  var nimiLogo = "/public/nimi-logo.svg";
-  var nimiIcon = "/public/icon-192.png";
+  var icon = "/public/nimi-infinity.svg?v=3";
+  var touchIcon = "/public/icon-512.png?v=3";
+  var wordmark = "/public/nimi-logo.svg?v=3";
 
-  function setFavicon() {
-    var links = document.querySelectorAll('link[rel~="icon"], link[rel="shortcut icon"], link[rel="apple-touch-icon"]');
-    links.forEach(function (link) { link.href = nimiIcon; });
+  function upsertLink(rel, href, type, sizes) {
+    var selector = 'link[rel="' + rel + '"]';
+    var links = document.querySelectorAll(selector);
     if (!links.length) {
-      var link = document.createElement("link");
-      link.rel = "icon";
-      link.href = nimiIcon;
-      document.head.appendChild(link);
+      var el = document.createElement("link");
+      el.rel = rel;
+      document.head.appendChild(el);
+      links = [el];
     }
+    Array.prototype.forEach.call(links, function (el) {
+      el.href = href;
+      if (type) el.type = type;
+      if (sizes) el.sizes = sizes;
+    });
   }
 
-  function setHeaderLogo() {
+  function setBrandIcons() {
+    upsertLink("icon", icon, "image/svg+xml", "any");
+    upsertLink("shortcut icon", icon, "image/svg+xml");
+    upsertLink("apple-touch-icon", touchIcon, "image/png", "512x512");
     document.querySelectorAll('img[alt="logo"], img.logo, header img').forEach(function (img) {
-      if (img.src.indexOf("/public/nimi-logo.svg") === -1) {
-        img.src = nimiLogo;
+      if (img.src.indexOf("/public/nimi-infinity.svg") === -1) {
+        img.src = icon;
         img.alt = "Nimi";
       }
     });
   }
 
-  function applyBranding() {
-    setFavicon();
-    setHeaderLogo();
-  }
-
+  function applyBranding() { setBrandIcons(); }
   applyBranding();
   new MutationObserver(applyBranding).observe(document.documentElement, {
     childList: true, subtree: true, attributes: true, attributeFilter: ["href", "src"]
   });
 
-  var manifest = document.createElement("link");
-  manifest.rel = "manifest";
-  manifest.href = "/public/manifest.json";
-  document.head.appendChild(manifest);
+  var manifestLink = document.querySelector('link[rel="manifest"]') || document.createElement("link");
+  manifestLink.rel = "manifest";
+  manifestLink.href = "/public/manifest.json?v=3";
+  document.head.appendChild(manifestLink);
 
   [["theme-color", "#0c0e14"], ["apple-mobile-web-app-capable", "yes"],
    ["apple-mobile-web-app-title", "Nimi"], ["mobile-web-app-capable", "yes"]]
