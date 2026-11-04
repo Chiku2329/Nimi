@@ -18,6 +18,15 @@ class GuestAuthTests(unittest.TestCase):
             self.assertEqual(first, second)
             self.assertTrue(first.startswith("guest_"))
 
+    def test_separate_browsers_get_separate_identities(self):
+        with patch.dict("os.environ", {"NIMI_GUEST_SECRET": "x" * 48}):
+            first = make_guest_cookie()
+            second = make_guest_cookie()
+            self.assertNotEqual(
+                guest_identifier_from_cookie(f"{COOKIE_NAME}={first}"),
+                guest_identifier_from_cookie(f"{COOKIE_NAME}={second}"),
+            )
+
     def test_tampered_cookie_is_rejected(self):
         with patch.dict("os.environ", {"NIMI_GUEST_SECRET": "x" * 48}):
             cookie = make_guest_cookie()
