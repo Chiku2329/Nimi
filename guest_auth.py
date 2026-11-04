@@ -11,13 +11,20 @@ COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 
 
 def _secret() -> bytes:
-    value = os.environ.get("NIMI_GUEST_SECRET") or os.environ.get("CHAINLIT_AUTH_SECRET")
-    if not value or len(value) < 32:
+    guest_secret = os.environ.get("NIMI_GUEST_SECRET", "").strip()
+    auth_secret = os.environ.get("CHAINLIT_AUTH_SECRET", "").strip()
+    value = guest_secret or auth_secret
+    if len(value) < 32:
         raise RuntimeError(
-            "Set NIMI_GUEST_SECRET (at least 32 characters) or a strong "
-            "CHAINLIT_AUTH_SECRET before starting Nimi."
+            "Set NIMI_GUEST_SECRET or CHAINLIT_AUTH_SECRET to a random secret "
+            "of at least 32 characters before starting Nimi."
         )
-    return value.encode("utf-8")
+    if guest_secret:
+        return guest_secret.encode("utf-8")
+    # Derive a separate key so guest-cookie signatures do not reuse the JWT key.
+    return hmac.new(
+        auth_secret.encode("utf-8"), b"nimi-guest-cookie-v1", hashlib.sha256
+    ).digest()
 
 
 def _sign(token: str) -> str:
