@@ -1,7 +1,7 @@
 """FastAPI entry point that silently provisions private guest sessions."""
 
 from fastapi import FastAPI, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from chainlit.server import _authenticate_user
 from chainlit.user import User
 from chainlit.utils import mount_chainlit
@@ -35,7 +35,10 @@ async def guest_auth(request: Request):
         identifier = guest_identifier_from_cookie(f"{COOKIE_NAME}={new_cookie}")
     if identifier is None:
         # Fail closed; never fall back to a shared anonymous identity.
-        return RedirectResponse(url="/login?error=guest_session", status_code=303)
+        return JSONResponse(
+            {"error": "Guest authentication is unavailable. Please contact the site owner."},
+            status_code=503,
+        )
 
     response = await _authenticate_user(
         request,
