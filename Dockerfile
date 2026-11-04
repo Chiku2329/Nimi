@@ -12,4 +12,4 @@ COPY --chown=user . .
 
 VOLUME ["/data"]
 EXPOSE 7860
-CMD ["sh", "-c", "python init_db.py && chainlit run app.py --host 0.0.0.0 --port ${PORT:-7860} --headless"]
+CMD ["sh", "-c", "python init_db.py && uvicorn server:app --host 0.0.0.0 --port ${PORT:-7860}"]
