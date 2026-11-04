@@ -67,6 +67,12 @@ CREATE TABLE IF NOT EXISTS feedbacks (
     "comment" TEXT
 );
 CREATE TABLE IF NOT EXISTS nimi_memories (
+    "id" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "user_key" TEXT NOT NULL,
+    "fact" TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS nimi_memories (
     "id" SERIAL PRIMARY KEY,
     "user_key" TEXT NOT NULL,
     "fact" TEXT NOT NULL
