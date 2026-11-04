@@ -5,6 +5,7 @@ import json
 import math
 import operator
 import os
+import sqlite3
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -16,6 +17,7 @@ from chainlit.input_widget import Select, Slider, Switch
 from chainlit.types import ThreadDict
 from openai import AsyncOpenAI
 from pypdf import PdfReader
+from guest_auth import guest_identifier_from_cookie
 
 client = AsyncOpenAI(
     api_key=os.environ["API_KEY"],
@@ -117,18 +119,12 @@ def init_data_layer():
     return SQLAlchemyDataLayer(conninfo=f"sqlite+aiosqlite:///{DATA_DIR}/chat.db")
 
 
-@cl.password_auth_callback
-def auth(username: str, password: str):
-    expected_user = os.environ.get("APP_USERNAME", "").strip()
-    expected_pass = os.environ.get("APP_PASSWORD", "").strip()
-    if (
-        expected_user
-        and expected_pass
-        and username.strip() == expected_user
-        and password.strip() == expected_pass
-    ):
-        return cl.User(identifier=username.strip(), metadata={"role": "user"})
-    return None
+@cl.header_auth_callback
+async def guest_header_auth(headers):
+    identifier = guest_identifier_from_cookie(headers.get("cookie"))
+    if not identifier:
+        return None
+    return cl.User(identifier=identifier, metadata={"role": "guest", "provider": "nimi"})
 
 
 @cl.set_chat_profiles
@@ -147,7 +143,9 @@ async def chat_profiles(current_user: cl.User):
 
 def user_key():
     user = cl.user_session.get("user")
-    return user.identifier if user else "default"
+    if not user or not user.identifier:
+        raise RuntimeError("A verified Nimi guest identity is required for private memory.")
+    return user.identifier
 
 
 def _pg_connect():
@@ -155,52 +153,61 @@ def _pg_connect():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
 
-def load_all_memories():
-    try:
-        with open(MEMORY_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
-
-
 def get_memories():
-    if os.environ.get("DATABASE_URL"):
-        try:
+    key = user_key()
+    try:
+        if os.environ.get("DATABASE_URL"):
             con = _pg_connect()
-            cur = con.cursor()
-            cur.execute(
-                "SELECT fact FROM nimi_memories WHERE user_key = %s ORDER BY id",
-                (user_key(),),
-            )
-            rows = [r[0] for r in cur.fetchall()]
+            try:
+                cur = con.cursor()
+                cur.execute(
+                    "SELECT fact FROM nimi_memories WHERE user_key = %s ORDER BY id",
+                    (key,),
+                )
+                return [row[0] for row in cur.fetchall()]
+            finally:
+                con.close()
+        con = sqlite3.connect(os.path.join(DATA_DIR, "chat.db"), timeout=10)
+        try:
+            rows = con.execute(
+                "SELECT fact FROM nimi_memories WHERE user_key = ? ORDER BY id", (key,)
+            ).fetchall()
+            return [row[0] for row in rows]
+        finally:
             con.close()
-            return rows
-        except Exception as e:
-            print("memory read error:", e, flush=True)
-            return []
-    return load_all_memories().get(user_key(), [])
+    except Exception as e:
+        print("memory read error:", e, flush=True)
+        return []
 
 
 def set_memories(items):
-    if os.environ.get("DATABASE_URL"):
-        try:
+    key = user_key()
+    try:
+        if os.environ.get("DATABASE_URL"):
             con = _pg_connect()
-            cur = con.cursor()
-            cur.execute("DELETE FROM nimi_memories WHERE user_key = %s", (user_key(),))
-            for fact in items:
-                cur.execute(
+            try:
+                cur = con.cursor()
+                cur.execute("DELETE FROM nimi_memories WHERE user_key = %s", (key,))
+                cur.executemany(
                     "INSERT INTO nimi_memories (user_key, fact) VALUES (%s, %s)",
-                    (user_key(), fact),
+                    [(key, fact) for fact in items],
                 )
-            con.commit()
+                con.commit()
+            finally:
+                con.close()
+            return
+        con = sqlite3.connect(os.path.join(DATA_DIR, "chat.db"), timeout=10)
+        try:
+            with con:
+                con.execute("DELETE FROM nimi_memories WHERE user_key = ?", (key,))
+                con.executemany(
+                    "INSERT INTO nimi_memories (user_key, fact) VALUES (?, ?)",
+                    [(key, fact) for fact in items],
+                )
+        finally:
             con.close()
-        except Exception as e:
-            print("memory write error:", e, flush=True)
-        return
-    data = load_all_memories()
-    data[user_key()] = items
-    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        print("memory write error:", e, flush=True)
 
 
 # ---------- tools ----------
