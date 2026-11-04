@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import os
 import secrets
+import time
 from http.cookies import SimpleCookie
 
 COOKIE_NAME = "nimi_guest"
@@ -32,7 +33,7 @@ def _sign(token: str) -> str:
 
 
 def make_guest_cookie() -> str:
-    token = secrets.token_urlsafe(32)
+    token = str(int(time.time())) + "." + secrets.token_urlsafe(32)
     return token + "." + _sign(token)
 
 
@@ -45,8 +46,15 @@ def guest_identifier_from_cookie(cookie_header: str | None) -> str | None:
         morsel = parsed.get(COOKIE_NAME)
         if morsel is None:
             return None
-        token, separator, signature = morsel.value.partition(".")
+        token, separator, signature = morsel.value.rpartition(".")
         if not separator or not token or not signature:
+            return None
+        issued_text, timestamp_separator, random_part = token.partition(".")
+        if not timestamp_separator or not random_part:
+            return None
+        issued_at = int(issued_text)
+        now = int(time.time())
+        if issued_at > now + 300 or now - issued_at > COOKIE_MAX_AGE:
             return None
         expected = _sign(token)
         if not hmac.compare_digest(signature, expected):
