@@ -1,4 +1,7 @@
 import unittest
+import time
+import hashlib
+import hmac
 from unittest.mock import patch
 
 from guest_auth import COOKIE_NAME, guest_identifier_from_cookie, make_guest_cookie
@@ -19,8 +22,19 @@ class GuestAuthTests(unittest.TestCase):
         with patch.dict("os.environ", {"NIMI_GUEST_SECRET": "x" * 48}):
             cookie = make_guest_cookie()
             token, signature = cookie.split(".", 1)
-            tampered = f"{COOKIE_NAME}={token}.{signature[:-1]}0"
+            changed = "0" if signature[-1] != "0" else "1"
+            tampered = f"{COOKIE_NAME}={token}.{signature[:-1]}{changed}"
             self.assertIsNone(guest_identifier_from_cookie(tampered))
+
+    def test_expired_cookie_is_rejected(self):
+        with patch.dict("os.environ", {"NIMI_GUEST_SECRET": "x" * 48}):
+            token = str(int(time.time()) - 60 * 60 * 24 * 366) + "." + ("a" * 40)
+            signature = hmac.new(
+                b"x" * 48, token.encode("ascii"), hashlib.sha256
+            ).hexdigest()
+            self.assertIsNone(
+                guest_identifier_from_cookie(f"{COOKIE_NAME}={token}.{signature}")
+            )
 
     def test_missing_cookie_is_rejected(self):
         with patch.dict("os.environ", {"NIMI_GUEST_SECRET": "x" * 48}):
