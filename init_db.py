@@ -73,6 +73,11 @@ CREATE TABLE IF NOT EXISTS nimi_memories (
     "user_key" TEXT NOT NULL,
     "fact" TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS nimi_rate_limits (
+    "user_key" TEXT PRIMARY KEY,
+    "window_start" BIGINT NOT NULL,
+    "request_count" INTEGER NOT NULL
+);
 """
 
 SQLITE_SCHEMA = """
@@ -142,6 +147,11 @@ CREATE TABLE IF NOT EXISTS nimi_memories (
     "id" INTEGER PRIMARY KEY AUTOINCREMENT,
     "user_key" TEXT NOT NULL,
     "fact" TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS nimi_rate_limits (
+    "user_key" TEXT PRIMARY KEY,
+    "window_start" INTEGER NOT NULL,
+    "request_count" INTEGER NOT NULL
 );
 """
 
