@@ -78,5 +78,37 @@ class PrivateMemoryIsolationTests(unittest.TestCase):
         self.assertEqual(self.memories_for("guest_beta"), ["Other guest fact"])
 
 
+    def test_memory_storage_enforces_item_and_character_limits(self):
+        oversized = "x" * (self.app.MAX_MEMORY_FACT_CHARS + 1)
+        self.save_for("guest_alpha", ["valid fact", oversized, " " * 2])
+        self.assertEqual(self.memories_for("guest_alpha"), ["valid fact"])
+
+    def test_memory_storage_caps_number_of_facts(self):
+        facts = [f"fact {index}" for index in range(self.app.MAX_MEMORY_ITEMS + 10)]
+        self.save_for("guest_alpha", facts)
+        saved = self.memories_for("guest_alpha")
+        self.assertEqual(len(saved), self.app.MAX_MEMORY_ITEMS)
+
+    def test_memory_storage_caps_total_characters(self):
+        facts = [f"{index}:" + ("x" * 490) for index in range(30)]
+        self.save_for("guest_alpha", facts)
+        saved = self.memories_for("guest_alpha")
+        self.assertLessEqual(sum(len(fact) for fact in saved), self.app.MAX_MEMORY_TOTAL_CHARS)
+
+    def test_remember_refuses_to_exceed_memory_item_limit(self):
+        facts = [f"fact {index}" for index in range(self.app.MAX_MEMORY_ITEMS)]
+        self.save_for("guest_alpha", facts)
+        with patch.object(self.app, "user_key", return_value="guest_alpha"):
+            result = self.app.remember("one more fact")
+        self.assertIn("full", result.lower())
+        self.assertEqual(self.memories_for("guest_alpha"), facts)
+
+    def test_remember_rejects_oversized_fact(self):
+        with patch.object(self.app, "user_key", return_value="guest_alpha"):
+            result = self.app.remember("x" * (self.app.MAX_MEMORY_FACT_CHARS + 1))
+        self.assertIn("too long", result.lower())
+        self.assertEqual(self.memories_for("guest_alpha"), [])
+
+
 if __name__ == "__main__":
     unittest.main()
