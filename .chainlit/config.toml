@@ -5,7 +5,7 @@ user_session_timeout = 1296000
 cache = false
 persist_user_env = false
 mask_user_env = false
-allow_origins = ["*"]
+allow_origins = ["https://nimi.blitz.cloud"]
 
 [features]
 unsafe_allow_html = false
@@ -23,9 +23,9 @@ reaction_on_message_received = false
 
 [features.spontaneous_file_upload]
 enabled = true
-accept = ["*/*"]
-max_files = 20
-max_size_mb = 500
+accept = ["application/pdf", "text/plain", "text/markdown", "text/csv", "image/png", "image/jpeg", "image/webp"]
+max_files = 3
+max_size_mb = 5
 
 [features.audio]
 enabled = false
