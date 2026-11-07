@@ -178,7 +178,7 @@ def get_memories():
         finally:
             con.close()
     except Exception as e:
-        print("memory read error:", e, flush=True)
+        print("memory read failed:", type(e).__name__, flush=True)
         return []
 
 
@@ -209,7 +209,7 @@ def set_memories(items):
         finally:
             con.close()
     except Exception as e:
-        print("memory write error:", e, flush=True)
+        print("memory write failed:", type(e).__name__, flush=True)
 
 
 # ---------- tools ----------
@@ -245,8 +245,15 @@ def _eval(node):
 
 
 def calculate(expression: str):
+    if not isinstance(expression, str) or len(expression) > 256:
+        raise ValueError("expression too long")
     tree = ast.parse(expression.replace("^", "**"), mode="eval")
-    return str(_eval(tree.body))
+    if sum(1 for _ in ast.walk(tree)) > 80:
+        raise ValueError("expression too complex")
+    result = _eval(tree.body)
+    if isinstance(result, (int, float)) and (not math.isfinite(result) or abs(result) > 1e100):
+        raise ValueError("result out of range")
+    return str(result)
 
 
 def get_time(timezone_name: str):
@@ -343,19 +350,34 @@ TOOLS = [
 
 async def run_tool(name, args):
     try:
+        if not isinstance(args, dict):
+            return "Invalid tool arguments."
+        limits = {
+            "web_search": ("query", 300),
+            "calculate": ("expression", 256),
+            "get_weather": ("city", 100),
+            "get_time": ("timezone_name", 100),
+            "remember": ("fact", 500),
+            "forget": ("keyword", 100),
+        }
+        if name not in limits:
+            return "Unknown tool."
+        field, maximum = limits[name]
+        value = args.get(field)
+        if not isinstance(value, str) or not value.strip() or len(value) > maximum:
+            return "Invalid or oversized tool arguments."
         if name == "web_search":
-            return await web_search(args["query"])
+            return await web_search(value)
         if name == "calculate":
-            return calculate(args["expression"])
+            return calculate(value)
         if name == "get_weather":
-            return await get_weather(args["city"])
+            return await get_weather(value)
         if name == "get_time":
-            return get_time(args["timezone_name"])
+            return get_time(value)
         if name == "remember":
-            return remember(args["fact"])
+            return remember(value)
         if name == "forget":
-            return forget(args["keyword"])
-        return f"Unknown tool: {name}"
+            return forget(value)
     except Exception as e:
         print("tool execution failed:", type(e).__name__, flush=True)
         return "The tool could not complete this request."
