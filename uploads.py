@@ -1,7 +1,9 @@
 """Strict server-side validation for files uploaded to public Nimi."""
 import io
+import warnings
 from pathlib import Path
 
+from PIL import Image
 from pypdf import PdfReader
 
 MAX_UPLOAD_COUNT = 3
@@ -11,6 +13,7 @@ MAX_TEXT_BYTES = 1 * 1024 * 1024
 MAX_PDF_PAGES = 25
 MAX_FILE_CHARS = 30_000
 MAX_TOTAL_TEXT_CHARS = 30_000
+MAX_IMAGE_PIXELS = 20_000_000
 
 _ALLOWED = {
     ".pdf": {"application/pdf"},
@@ -22,10 +25,43 @@ _ALLOWED = {
     ".jpeg": {"image/jpeg"},
     ".webp": {"image/webp"},
 }
+_IMAGE_FORMATS = {
+    ".png": ("PNG",),
+    ".jpg": ("JPEG",),
+    ".jpeg": ("JPEG",),
+    ".webp": ("WEBP",),
+}
 
 
 class UploadRejected(ValueError):
     """An upload failed Nimi's server-side safety checks."""
+
+
+def _validate_image(data, suffix):
+    """Decode only supported raster formats and enforce a strict pixel budget."""
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(io.BytesIO(data), formats=_IMAGE_FORMATS[suffix]) as image:
+                if image.format not in _IMAGE_FORMATS[suffix]:
+                    raise UploadRejected("An image file failed content validation.")
+                width, height = image.size
+                if width < 1 or height < 1 or width * height > MAX_IMAGE_PIXELS:
+                    raise UploadRejected("Images must not exceed 20 million pixels.")
+                image.verify()
+
+            # verify() checks file structure; load() forces a full decode.
+            with Image.open(io.BytesIO(data), formats=_IMAGE_FORMATS[suffix]) as image:
+                if image.format not in _IMAGE_FORMATS[suffix]:
+                    raise UploadRejected("An image file failed content validation.")
+                width, height = image.size
+                if width < 1 or height < 1 or width * height > MAX_IMAGE_PIXELS:
+                    raise UploadRejected("Images must not exceed 20 million pixels.")
+                image.load()
+    except UploadRejected:
+        raise
+    except Exception:
+        raise UploadRejected("An image file could not be safely decoded.") from None
 
 
 def _read_upload(element):
@@ -87,14 +123,7 @@ def _read_upload(element):
             raise UploadRejected("Text files must use UTF-8 encoding.") from None
         return {"name": name, "kind": "text", "mime": mime, "data": data, "text": text}
 
-    signatures = {
-        ".png": data.startswith(b"\x89PNG\r\n\x1a\n"),
-        ".jpg": data.startswith(b"\xff\xd8\xff"),
-        ".jpeg": data.startswith(b"\xff\xd8\xff"),
-        ".webp": len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP",
-    }
-    if not signatures.get(suffix, False):
-        raise UploadRejected("An image file failed content validation.")
+    _validate_image(data, suffix)
     return {"name": name, "kind": "image", "mime": mime, "data": data, "text": ""}
 
 
