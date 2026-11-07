@@ -43,5 +43,14 @@ class UploadValidationTests(unittest.TestCase):
             validate_upload_batch(elements)
 
 
+    def test_rejects_excessive_combined_extracted_text(self):
+        elements = [
+            self.make_file(f"{i}.txt", "text/plain", b"x" * 11000)
+            for i in range(3)
+        ]
+        with self.assertRaises(UploadRejected):
+            validate_upload_batch(elements)
+
+
 if __name__ == "__main__":
     unittest.main()
