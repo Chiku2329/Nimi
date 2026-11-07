@@ -2,9 +2,11 @@
 
 CVE-2026-86099 affects Chainlit <= 2.12.0. Chainlit uses the session id as a
 filesystem directory name. Until Nimi migrates to a maintained, fixed release,
-reject anything except a canonical UUID before BaseSession stores the id.
+validate ids both when sessions are created and whenever their files directory
+is resolved.
 """
 import uuid
+from pathlib import Path
 
 from chainlit.session import BaseSession
 
@@ -24,7 +26,7 @@ def canonical_session_id(value: object) -> str:
 
 
 def apply_chainlit_session_guard() -> None:
-    """Validate session ids at the shared BaseSession filesystem boundary."""
+    """Validate ids at construction and at the filesystem path boundary."""
     if getattr(BaseSession, "_nimi_session_id_guard", False):
         return
 
@@ -39,5 +41,16 @@ def apply_chainlit_session_guard() -> None:
             raise ConnectionRefusedError("Missing session identifier.")
         original_init(self, *args, **kwargs)
 
+    def guarded_files_dir(self):
+        from chainlit.config import FILES_DIRECTORY
+
+        session_id = canonical_session_id(getattr(self, "id", None))
+        root = Path(FILES_DIRECTORY).resolve()
+        candidate = root / session_id
+        if candidate.parent != root or candidate.is_symlink():
+            raise ConnectionRefusedError("Invalid session file directory.")
+        return candidate
+
     BaseSession.__init__ = guarded_init
+    BaseSession.files_dir = property(guarded_files_dir)
     BaseSession._nimi_session_id_guard = True
