@@ -18,6 +18,7 @@ from chainlit.types import ThreadDict
 from openai import AsyncOpenAI
 from pypdf import PdfReader
 from guest_auth import guest_identifier_from_cookie
+from security import allow_chat_request
 
 client = AsyncOpenAI(
     api_key=os.environ["API_KEY"],
@@ -537,6 +538,19 @@ async def handle_command(cmd):
 
 @cl.on_message
 async def main(message: cl.Message):
+    try:
+        if not allow_chat_request(user_key()):
+            await cl.Message(
+                content="You've reached the message limit. Please wait a minute and try again."
+            ).send()
+            return
+    except Exception as e:
+        print("rate limit check failed:", e, flush=True)
+        await cl.Message(
+            content="Nimi is temporarily unable to accept messages. Please try again shortly."
+        ).send()
+        return
+
     cmd = message.content.strip().lower()
     if cmd in ("/export", "/memory", "/clear-memory"):
         await handle_command(cmd)
