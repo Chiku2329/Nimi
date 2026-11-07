@@ -23,6 +23,8 @@ from security import allow_chat_request
 client = AsyncOpenAI(
     api_key=os.environ["API_KEY"],
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+    timeout=60.0,
+    max_retries=1,
 )
 
 MODELS = ["gemini-flash-lite-latest", "gemini-flash-latest"]
@@ -30,6 +32,7 @@ MAX_FILE_CHARS = 30000
 MAX_HISTORY = 20
 MAX_TOOL_ROUNDS = 3
 MAX_TOOL_CALLS_PER_ROUND = 3
+MAX_OUTPUT_TOKENS = 2048
 def pick_data_dir():
     wanted = os.environ.get("DATA_DIR", ".")
     try:
@@ -402,6 +405,24 @@ def build_system_prompt():
     return "\n\n".join(p for p in parts if p)
 
 
+def normalize_settings(settings):
+    """Treat browser-provided chat settings as untrusted input."""
+    settings = settings if isinstance(settings, dict) else {}
+    model = settings.get("model")
+    if model not in MODELS:
+        model = MODELS[0]
+    try:
+        temperature = float(settings.get("temperature", 0.7))
+    except (TypeError, ValueError):
+        temperature = 0.7
+    temperature = max(0.0, min(1.5, temperature))
+    return {
+        "model": model,
+        "temperature": temperature,
+        "tools": settings.get("tools", True) is True,
+    }
+
+
 async def setup_settings():
     settings = await cl.ChatSettings(
         [
@@ -411,7 +432,7 @@ async def setup_settings():
             Switch(id="tools", label="Web search & tools", initial=True),
         ]
     ).send()
-    cl.user_session.set("settings", settings)
+    cl.user_session.set("settings", normalize_settings(settings))
 
 
 async def auto_title(first_text, model):
@@ -444,6 +465,7 @@ async def generate(work, settings, reply):
         kwargs = dict(
             model=settings["model"],
             temperature=settings["temperature"],
+            max_tokens=MAX_OUTPUT_TOKENS,
             messages=work,
             stream=True,
         )
@@ -462,6 +484,8 @@ async def generate(work, settings, reply):
                 await reply.stream_token(delta.content)
             for tc in delta.tool_calls or []:
                 key = tc.index if tc.index is not None else len(calls)
+                if key >= MAX_TOOL_CALLS_PER_ROUND:
+                    continue
                 c = calls.setdefault(key, {"name": "", "args": ""})
                 if tc.function:
                     if tc.function.name:
@@ -522,7 +546,7 @@ async def on_chat_resume(thread: ThreadDict):
 
 @cl.on_settings_update
 async def on_settings_update(settings):
-    cl.user_session.set("settings", settings)
+    cl.user_session.set("settings", normalize_settings(settings))
 
 
 async def handle_command(cmd):
@@ -571,7 +595,7 @@ async def main(message: cl.Message):
         return
 
     history = cl.user_session.get("history")
-    settings = cl.user_session.get("settings")
+    settings = normalize_settings(cl.user_session.get("settings"))
 
     user_text = message.content
     image_parts, image_names = [], []
