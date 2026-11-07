@@ -16,19 +16,24 @@ from chainlit.data.sql_alchemy import SQLAlchemyDataLayer
 from chainlit.input_widget import Select, Slider, Switch
 from chainlit.types import ThreadDict
 from openai import AsyncOpenAI
-from pypdf import PdfReader
+from uploads import UploadRejected, validate_upload_batch
 from guest_auth import guest_identifier_from_cookie
 from security import allow_chat_request
 
 client = AsyncOpenAI(
     api_key=os.environ["API_KEY"],
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+    timeout=60.0,
+    max_retries=1,
 )
 
 MODELS = ["gemini-flash-lite-latest", "gemini-flash-latest"]
 MAX_FILE_CHARS = 30000
 MAX_HISTORY = 20
 MAX_TOOL_ROUNDS = 3
+MAX_TOOL_CALLS_PER_ROUND = 3
+MAX_OUTPUT_TOKENS = 2048
+MAX_MESSAGE_CHARS = 20000
 def pick_data_dir():
     wanted = os.environ.get("DATA_DIR", ".")
     try:
@@ -177,7 +182,7 @@ def get_memories():
         finally:
             con.close()
     except Exception as e:
-        print("memory read error:", e, flush=True)
+        print("memory read failed:", type(e).__name__, flush=True)
         return []
 
 
@@ -208,7 +213,7 @@ def set_memories(items):
         finally:
             con.close()
     except Exception as e:
-        print("memory write error:", e, flush=True)
+        print("memory write failed:", type(e).__name__, flush=True)
 
 
 # ---------- tools ----------
@@ -244,8 +249,15 @@ def _eval(node):
 
 
 def calculate(expression: str):
+    if not isinstance(expression, str) or len(expression) > 256:
+        raise ValueError("expression too long")
     tree = ast.parse(expression.replace("^", "**"), mode="eval")
-    return str(_eval(tree.body))
+    if sum(1 for _ in ast.walk(tree)) > 80:
+        raise ValueError("expression too complex")
+    result = _eval(tree.body)
+    if isinstance(result, (int, float)) and (not math.isfinite(result) or abs(result) > 1e100):
+        raise ValueError("result out of range")
+    return str(result)
 
 
 def get_time(timezone_name: str):
@@ -342,21 +354,37 @@ TOOLS = [
 
 async def run_tool(name, args):
     try:
+        if not isinstance(args, dict):
+            return "Invalid tool arguments."
+        limits = {
+            "web_search": ("query", 300),
+            "calculate": ("expression", 256),
+            "get_weather": ("city", 100),
+            "get_time": ("timezone_name", 100),
+            "remember": ("fact", 500),
+            "forget": ("keyword", 100),
+        }
+        if name not in limits:
+            return "Unknown tool."
+        field, maximum = limits[name]
+        value = args.get(field)
+        if not isinstance(value, str) or not value.strip() or len(value) > maximum:
+            return "Invalid or oversized tool arguments."
         if name == "web_search":
-            return await web_search(args["query"])
+            return await web_search(value)
         if name == "calculate":
-            return calculate(args["expression"])
+            return calculate(value)
         if name == "get_weather":
-            return await get_weather(args["city"])
+            return await get_weather(value)
         if name == "get_time":
-            return get_time(args["timezone_name"])
+            return get_time(value)
         if name == "remember":
-            return remember(args["fact"])
+            return remember(value)
         if name == "forget":
-            return forget(args["keyword"])
-        return f"Unknown tool: {name}"
+            return forget(value)
     except Exception as e:
-        return f"Tool error: {e}"
+        print("tool execution failed:", type(e).__name__, flush=True)
+        return "The tool could not complete this request."
 
 
 # ---------- helpers ----------
@@ -378,15 +406,22 @@ def build_system_prompt():
     return "\n\n".join(p for p in parts if p)
 
 
-def read_file(element):
-    name = element.name.lower()
-    if name.endswith(".pdf"):
-        reader = PdfReader(element.path)
-        text = "\n".join(page.extract_text() or "" for page in reader.pages)
-    else:
-        with open(element.path, "r", encoding="utf-8", errors="ignore") as f:
-            text = f.read()
-    return text[:MAX_FILE_CHARS]
+def normalize_settings(settings):
+    """Treat browser-provided chat settings as untrusted input."""
+    settings = settings if isinstance(settings, dict) else {}
+    model = settings.get("model")
+    if model not in MODELS:
+        model = MODELS[0]
+    try:
+        temperature = float(settings.get("temperature", 0.7))
+    except (TypeError, ValueError):
+        temperature = 0.7
+    temperature = max(0.0, min(1.5, temperature))
+    return {
+        "model": model,
+        "temperature": temperature,
+        "tools": settings.get("tools", True) is True,
+    }
 
 
 async def setup_settings():
@@ -398,7 +433,7 @@ async def setup_settings():
             Switch(id="tools", label="Web search & tools", initial=True),
         ]
     ).send()
-    cl.user_session.set("settings", settings)
+    cl.user_session.set("settings", normalize_settings(settings))
 
 
 async def auto_title(first_text, model):
@@ -421,8 +456,8 @@ async def auto_title(first_text, model):
                 name=title,
                 user_id=getattr(user, "id", None),
             )
-    except Exception:
-        pass
+    except Exception as e:
+        print("auto-title generation failed:", type(e).__name__, flush=True)
 
 
 async def generate(work, settings, reply):
@@ -431,6 +466,7 @@ async def generate(work, settings, reply):
         kwargs = dict(
             model=settings["model"],
             temperature=settings["temperature"],
+            max_tokens=MAX_OUTPUT_TOKENS,
             messages=work,
             stream=True,
         )
@@ -449,6 +485,8 @@ async def generate(work, settings, reply):
                 await reply.stream_token(delta.content)
             for tc in delta.tool_calls or []:
                 key = tc.index if tc.index is not None else len(calls)
+                if key >= MAX_TOOL_CALLS_PER_ROUND:
+                    continue
                 c = calls.setdefault(key, {"name": "", "args": ""})
                 if tc.function:
                     if tc.function.name:
@@ -460,7 +498,8 @@ async def generate(work, settings, reply):
             return
 
         results = []
-        for c in calls.values():
+        selected_calls = list(calls.values())[:MAX_TOOL_CALLS_PER_ROUND]
+        for c in selected_calls:
             try:
                 args = json.loads(c["args"] or "{}")
             except Exception:
@@ -508,7 +547,7 @@ async def on_chat_resume(thread: ThreadDict):
 
 @cl.on_settings_update
 async def on_settings_update(settings):
-    cl.user_session.set("settings", settings)
+    cl.user_session.set("settings", normalize_settings(settings))
 
 
 async def handle_command(cmd):
@@ -545,9 +584,15 @@ async def main(message: cl.Message):
             ).send()
             return
     except Exception as e:
-        print("rate limit check failed:", e, flush=True)
+        print("rate limit check failed:", type(e).__name__, flush=True)
         await cl.Message(
             content="Nimi is temporarily unable to accept messages. Please try again shortly."
+        ).send()
+        return
+
+    if len(message.content or "") > MAX_MESSAGE_CHARS:
+        await cl.Message(
+            content="That message is too long. Please keep messages under 20,000 characters."
         ).send()
         return
 
@@ -557,23 +602,24 @@ async def main(message: cl.Message):
         return
 
     history = cl.user_session.get("history")
-    settings = cl.user_session.get("settings")
+    settings = normalize_settings(cl.user_session.get("settings"))
 
     user_text = message.content
     image_parts, image_names = [], []
-    for element in message.elements or []:
-        try:
-            if element.mime and element.mime.startswith("image/"):
-                with open(element.path, "rb") as f:
-                    b64 = base64.b64encode(f.read()).decode()
-                image_parts.append(
-                    {"type": "image_url", "image_url": {"url": f"data:{element.mime};base64,{b64}"}}
-                )
-                image_names.append(element.name)
-            else:
-                user_text += f"\n\n[Attached file: {element.name}]\n{read_file(element)}"
-        except Exception as e:
-            await cl.Message(content=f"Could not read {element.name}: {e}").send()
+    try:
+        uploads = validate_upload_batch(message.elements or [])
+    except UploadRejected as e:
+        await cl.Message(content=str(e) + " Please remove the file and try again.").send()
+        return
+    for upload in uploads:
+        if upload["kind"] == "image":
+            b64 = base64.b64encode(upload["data"]).decode("ascii")
+            image_parts.append(
+                {"type": "image_url", "image_url": {"url": f"data:{upload['mime']};base64,{b64}"}}
+            )
+            image_names.append(upload["name"])
+        else:
+            user_text += f"\n\n[Attached file: {upload['name']}]\n{upload['text']}"
 
     if image_parts and not user_text.strip():
         user_text = "Describe this image."
@@ -589,7 +635,8 @@ async def main(message: cl.Message):
     try:
         await generate(work, settings, reply)
     except Exception as e:
-        await cl.Message(content=f"Error: {e}").send()
+        print("chat generation failed:", type(e).__name__, flush=True)
+        await cl.Message(content="Nimi encountered a temporary error. Please try again shortly.").send()
         return
 
     if not reply.content:

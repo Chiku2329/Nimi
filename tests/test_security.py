@@ -4,7 +4,11 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
-from security import REQUESTS_PER_MINUTE, allow_chat_request
+from security import (
+    GLOBAL_REQUESTS_PER_MINUTE,
+    REQUESTS_PER_MINUTE,
+    allow_chat_request,
+)
 
 
 class RateLimitTests(unittest.TestCase):
@@ -46,6 +50,15 @@ class RateLimitTests(unittest.TestCase):
         for _ in range(REQUESTS_PER_MINUTE):
             self.assertTrue(allow_chat_request("guest_a", now=120))
         self.assertTrue(allow_chat_request("guest_b", now=120))
+
+    def test_global_limit_blocks_cookie_rotation_abuse(self):
+        for index in range(GLOBAL_REQUESTS_PER_MINUTE):
+            self.assertTrue(allow_chat_request(f"guest_{index}", now=120))
+        self.assertFalse(allow_chat_request("guest_new_cookie", now=120))
+
+    def test_reserved_global_key_cannot_be_used_by_a_guest(self):
+        with self.assertRaises(ValueError):
+            allow_chat_request("__nimi_global_request_bucket__", now=120)
 
 
 if __name__ == "__main__":
