@@ -1,4 +1,4 @@
-"""FastAPI entry point that silently provisions private guest sessions."""
+""""FastAPI entry point that silently provisions private guest sessions."""
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -7,6 +7,7 @@ from chainlit.user import User
 from chainlit.utils import mount_chainlit
 
 from chainlit_hardening import apply_chainlit_session_guard
+from response_security import build_security_headers
 
 from guest_auth import (
     COOKIE_MAX_AGE,
@@ -27,8 +28,13 @@ async def send_login_page_to_guest_auth(request: Request, call_next):
     # Chainlit redirects unauthenticated visitors to /login. Send browser
     # navigations through the silent guest bootstrap instead of showing a form.
     if request.url.path.rstrip("/") == "/login" and "text/html" in request.headers.get("accept", ""):
-        return RedirectResponse(url="/guest-auth", status_code=303)
-    return await call_next(request)
+        response = RedirectResponse(url="/guest-auth", status_code=303)
+    else:
+        response = await call_next(request)
+
+    # Add defensive browser headers to normal responses and redirects alike.
+    response.headers.update(build_security_headers(is_https=request.url.scheme == "https"))
+    return response
 
 
 @app.get("/guest-auth")
@@ -65,3 +71,4 @@ async def guest_auth(request: Request):
 
 
 mount_chainlit(app=app, target="app.py", path="/")
+"
