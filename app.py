@@ -33,6 +33,7 @@ MAX_HISTORY = 20
 MAX_TOOL_ROUNDS = 3
 MAX_TOOL_CALLS_PER_ROUND = 3
 MAX_OUTPUT_TOKENS = 2048
+MAX_MESSAGE_CHARS = 20000
 def pick_data_dir():
     wanted = os.environ.get("DATA_DIR", ".")
     try:
@@ -586,6 +587,12 @@ async def main(message: cl.Message):
         print("rate limit check failed:", type(e).__name__, flush=True)
         await cl.Message(
             content="Nimi is temporarily unable to accept messages. Please try again shortly."
+        ).send()
+        return
+
+    if len(message.content or "") > MAX_MESSAGE_CHARS:
+        await cl.Message(
+            content="That message is too long. Please keep messages under 20,000 characters."
         ).send()
         return
 
