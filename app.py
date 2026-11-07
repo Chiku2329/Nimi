@@ -456,8 +456,8 @@ async def auto_title(first_text, model):
                 name=title,
                 user_id=getattr(user, "id", None),
             )
-    except Exception:
-        pass
+    except Exception as e:
+        print("auto-title generation failed:", type(e).__name__, flush=True)
 
 
 async def generate(work, settings, reply):
