@@ -1,4 +1,4 @@
-""""FastAPI entry point that silently provisions private guest sessions."""
+"""FastAPI entry point that silently provisions private guest sessions."""
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -71,4 +71,3 @@ async def guest_auth(request: Request):
 
 
 mount_chainlit(app=app, target="app.py", path="/")
-"
