@@ -2,7 +2,7 @@ name: security-checks
 
 on:
   push:
-    branches: [nimi-agent-foundation, "security/**"]
+    branches: [nimi-agent-foundation, "security/**", "release/**"]
   pull_request:
     branches: [main, nimi-agent-foundation]
   schedule:
