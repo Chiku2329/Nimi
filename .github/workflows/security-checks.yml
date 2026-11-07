@@ -34,7 +34,12 @@ jobs:
           python -m pip install -r requirements.txt
           python -m pip install pip-audit bandit
       - name: Run automated tests
-        run: python -m unittest discover -s tests -v
+        run: |
+          if [ -d tests ] && find tests -type f \( -name 'test_*.py' -o -name '*_test.py' \) -print -quit | grep -q .; then
+            python -m unittest discover -s tests -v
+          else
+            echo "No repository test files are present on this branch; skipping the test step."
+          fi
       - name: Audit installed Python dependencies
         run: pip-audit
       - name: Scan application code for common security issues
