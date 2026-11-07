@@ -24,11 +24,14 @@ def _next_count(cursor, user_key, window_start, placeholder):
         """,
         (user_key, window_start),
     )
-    cursor.execute(
+    result = cursor.execute(
         f"SELECT request_count FROM nimi_rate_limits WHERE user_key = {placeholder}",
         (user_key,),
     )
-    return cursor.fetchone()[0]
+    # psycopg2 cursors expose fetchone() directly; sqlite3.Connection.execute()
+    # returns a cursor and the connection itself has no fetchone() method.
+    row = cursor.fetchone() if hasattr(cursor, "fetchone") else result.fetchone()
+    return row[0]
 
 
 def allow_chat_request(user_key: str, now: float | None = None) -> bool:
