@@ -10,6 +10,7 @@ MAX_TOTAL_BYTES = 15 * 1024 * 1024
 MAX_TEXT_BYTES = 1 * 1024 * 1024
 MAX_PDF_PAGES = 25
 MAX_FILE_CHARS = 30_000
+MAX_TOTAL_TEXT_CHARS = 30_000
 
 _ALLOWED = {
     ".pdf": {"application/pdf"},
@@ -108,4 +109,6 @@ def validate_upload_batch(elements):
         raise UploadRejected("The combined upload size exceeds 15 MB.")
     if sum(len(item["data"]) for item in validated if item["kind"] == "image") > 10 * 1024 * 1024:
         raise UploadRejected("Combined images are limited to 10 MB per message.")
+    if sum(len(item["text"]) for item in validated) > MAX_TOTAL_TEXT_CHARS:
+        raise UploadRejected("Combined extracted text is limited to 30,000 characters per message.")
     return validated
