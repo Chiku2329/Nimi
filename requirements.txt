@@ -1,7 +1,7 @@
 # Direct application dependencies are pinned for repeatable staging builds.
 # Transitive dependencies are checked by pip-audit in GitHub Actions.
 chainlit==2.12.0
-openai==3.47.0
+openai==3.46.0
 pypdf==7.0.0
 ddgs==9.16.1
 aiosqlite==0.22.1
