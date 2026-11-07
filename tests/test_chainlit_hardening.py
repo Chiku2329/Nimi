@@ -38,5 +38,41 @@ class SessionIdGuardTests(unittest.TestCase):
             canonical_session_id("{" + str(uuid.uuid4()) + "}")
 
 
+    def test_files_directory_is_confined_to_chainlit_root(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import chainlit.config
+
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(chainlit.config, "FILES_DIRECTORY", Path(directory)):
+                value = str(uuid.uuid4())
+                session = self.make_session(value)
+                self.assertEqual(session.files_dir, Path(directory) / value)
+
+    def test_files_directory_revalidates_mutated_session_id(self):
+        session = self.make_session(str(uuid.uuid4()))
+        session.id = "../../outside"
+        with self.assertRaises(ConnectionRefusedError):
+            _ = session.files_dir
+
+    def test_files_directory_rejects_symlinked_session_folder(self):
+        import tempfile
+        from pathlib import Path
+        from unittest.mock import patch
+        import chainlit.config
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            outside = root / "outside"
+            outside.mkdir()
+            value = str(uuid.uuid4())
+            (root / value).symlink_to(outside, target_is_directory=True)
+            with patch.object(chainlit.config, "FILES_DIRECTORY", root):
+                session = self.make_session(value)
+                with self.assertRaises(ConnectionRefusedError):
+                    _ = session.files_dir
+
+
 if __name__ == "__main__":
     unittest.main()
