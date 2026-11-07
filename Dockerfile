@@ -18,10 +18,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY --chown=root:root . .
 RUN mkdir -p /home/user/app/.files \
     && chown -R user:user /data /home/user/app/.files \
+    && chmod 700 /data /home/user/app/.files \
     && chmod -R a-w /home/user/app \
     && chmod u+rwx /home/user/app/.files
 
 USER user
 VOLUME ["/data"]
 EXPOSE 7860
-CMD ["sh", "-c", "python init_db.py && uvicorn server:app --host 0.0.0.0 --port ${PORT:-7860}"]
+CMD ["sh", "-c", "umask 077 && python init_db.py && uvicorn server:app --host 0.0.0.0 --port ${PORT:-7860}"]
