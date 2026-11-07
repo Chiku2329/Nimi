@@ -1,11 +1,13 @@
+# Direct application dependencies are pinned for repeatable staging builds.
+# Transitive dependencies are checked by pip-audit in GitHub Actions.
 chainlit==2.12.0
-openai
-pypdf
-ddgs
-aiosqlite
-sqlalchemy
-greenlet
-httpx
-tzdata
-asyncpg
-psycopg2-binary
+openai==3.47.0
+pypdf==7.0.0
+ddgs==9.16.1
+aiosqlite==0.22.1
+SQLAlchemy==2.0.57
+greenlet==3.5.6
+httpx==0.28.1
+tzdata==2026.6
+asyncpg==0.32.0
+psycopg2-binary==2.9.13
