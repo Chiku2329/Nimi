@@ -4,8 +4,8 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
-MAX_UPLOAD_COUNT = 5
-MAX_FILE_BYTES = 10 * 1024 * 1024
+MAX_UPLOAD_COUNT = 3
+MAX_FILE_BYTES = 5 * 1024 * 1024
 MAX_TOTAL_BYTES = 15 * 1024 * 1024
 MAX_TEXT_BYTES = 1 * 1024 * 1024
 MAX_PDF_PAGES = 25
@@ -106,6 +106,6 @@ def validate_upload_batch(elements):
     validated = [_read_upload(element) for element in elements]
     if sum(len(item["data"]) for item in validated) > MAX_TOTAL_BYTES:
         raise UploadRejected("The combined upload size exceeds 15 MB.")
-    if sum(len(item["data"]) for item in validated if item["kind"] == "image") > MAX_FILE_BYTES:
+    if sum(len(item["data"]) for item in validated if item["kind"] == "image") > 10 * 1024 * 1024:
         raise UploadRejected("Combined images are limited to 10 MB per message.")
     return validated
