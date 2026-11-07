@@ -184,62 +184,61 @@ def normalize_memories(items):
 
 
 def get_memories():
+    """Read this guest's memories; propagate storage failures instead of
+    pretending that a failed read means the guest has no saved memories.
+    """
     key = user_key()
-    try:
-        if os.environ.get("DATABASE_URL"):
-            con = _pg_connect()
-            try:
-                cur = con.cursor()
-                cur.execute(
-                    "SELECT fact FROM nimi_memories WHERE user_key = %s ORDER BY id DESC LIMIT %s",
-                    (key, MAX_MEMORY_ITEMS),
-                )
-                return normalize_memories([row[0] for row in reversed(cur.fetchall())])
-            finally:
-                con.close()
-        con = sqlite3.connect(os.path.join(DATA_DIR, "chat.db"), timeout=10)
+    if os.environ.get("DATABASE_URL"):
+        con = _pg_connect()
         try:
-            rows = con.execute(
-                "SELECT fact FROM nimi_memories WHERE user_key = ? ORDER BY id DESC LIMIT ?",
+            cur = con.cursor()
+            cur.execute(
+                "SELECT fact FROM nimi_memories WHERE user_key = %s ORDER BY id DESC LIMIT %s",
                 (key, MAX_MEMORY_ITEMS),
-            ).fetchall()
-            return normalize_memories([row[0] for row in reversed(rows)])
+            )
+            return normalize_memories([row[0] for row in reversed(cur.fetchall())])
         finally:
             con.close()
-    except Exception as e:
-        print("memory read failed:", type(e).__name__, flush=True)
-        return []
+
+    con = sqlite3.connect(os.path.join(DATA_DIR, "chat.db"), timeout=10)
+    try:
+        rows = con.execute(
+            "SELECT fact FROM nimi_memories WHERE user_key = ? ORDER BY id DESC LIMIT ?",
+            (key, MAX_MEMORY_ITEMS),
+        ).fetchall()
+        return normalize_memories([row[0] for row in reversed(rows)])
+    finally:
+        con.close()
 
 
 def set_memories(items):
+    """Replace this guest's memories atomically; never hide a failed write."""
     items = normalize_memories(items)
     key = user_key()
-    try:
-        if os.environ.get("DATABASE_URL"):
-            con = _pg_connect()
-            try:
-                cur = con.cursor()
-                cur.execute("DELETE FROM nimi_memories WHERE user_key = %s", (key,))
-                cur.executemany(
-                    "INSERT INTO nimi_memories (user_key, fact) VALUES (%s, %s)",
-                    [(key, fact) for fact in items],
-                )
-                con.commit()
-            finally:
-                con.close()
-            return
-        con = sqlite3.connect(os.path.join(DATA_DIR, "chat.db"), timeout=10)
+    if os.environ.get("DATABASE_URL"):
+        con = _pg_connect()
         try:
-            with con:
-                con.execute("DELETE FROM nimi_memories WHERE user_key = ?", (key,))
-                con.executemany(
-                    "INSERT INTO nimi_memories (user_key, fact) VALUES (?, ?)",
-                    [(key, fact) for fact in items],
-                )
+            cur = con.cursor()
+            cur.execute("DELETE FROM nimi_memories WHERE user_key = %s", (key,))
+            cur.executemany(
+                "INSERT INTO nimi_memories (user_key, fact) VALUES (%s, %s)",
+                [(key, fact) for fact in items],
+            )
+            con.commit()
         finally:
             con.close()
-    except Exception as e:
-        print("memory write failed:", type(e).__name__, flush=True)
+        return
+
+    con = sqlite3.connect(os.path.join(DATA_DIR, "chat.db"), timeout=10)
+    try:
+        with con:
+            con.execute("DELETE FROM nimi_memories WHERE user_key = ?", (key,))
+            con.executemany(
+                "INSERT INTO nimi_memories (user_key, fact) VALUES (?, ?)",
+                [(key, fact) for fact in items],
+            )
+    finally:
+        con.close()
 
 
 # ---------- tools ----------

@@ -78,6 +78,20 @@ class PrivateMemoryIsolationTests(unittest.TestCase):
         self.assertEqual(self.memories_for("guest_beta"), ["Other guest fact"])
 
 
+    def test_memory_read_failure_is_not_mistaken_for_empty_memory(self):
+        with sqlite3.connect(os.path.join(self.temp_dir.name, "chat.db")) as con:
+            con.execute("DROP TABLE nimi_memories")
+        with patch.object(self.app, "user_key", return_value="guest_alpha"):
+            with self.assertRaises(sqlite3.OperationalError):
+                self.app.get_memories()
+
+    def test_memory_write_failure_is_reported_to_caller(self):
+        with sqlite3.connect(os.path.join(self.temp_dir.name, "chat.db")) as con:
+            con.execute("DROP TABLE nimi_memories")
+        with patch.object(self.app, "user_key", return_value="guest_alpha"):
+            with self.assertRaises(sqlite3.OperationalError):
+                self.app.set_memories(["a private fact"])
+
     def test_memory_storage_enforces_item_and_character_limits(self):
         oversized = "x" * (self.app.MAX_MEMORY_FACT_CHARS + 1)
         self.save_for("guest_alpha", ["valid fact", oversized, " " * 2])
