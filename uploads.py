@@ -51,7 +51,7 @@ def _read_upload(element):
         raise UploadRejected("An uploaded file could not be read.") from None
 
     if not data or len(data) > MAX_FILE_BYTES:
-        raise UploadRejected("A file is empty or exceeds the 10 MB limit.")
+        raise UploadRejected("A file is empty or exceeds the 5 MB limit.")
 
     if suffix == ".pdf":
         if b"%PDF-" not in data[:1024]:
@@ -102,7 +102,7 @@ def validate_upload_batch(elements):
     """Validate count, each file, and aggregate request size before processing."""
     elements = list(elements or [])
     if len(elements) > MAX_UPLOAD_COUNT:
-        raise UploadRejected("You can attach up to five files at a time.")
+        raise UploadRejected("You can attach up to three files at a time.")
 
     validated = [_read_upload(element) for element in elements]
     if sum(len(item["data"]) for item in validated) > MAX_TOTAL_BYTES:
