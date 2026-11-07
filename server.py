@@ -6,12 +6,18 @@ from chainlit.server import _authenticate_user
 from chainlit.user import User
 from chainlit.utils import mount_chainlit
 
+from chainlit_hardening import apply_chainlit_session_guard
+
 from guest_auth import (
     COOKIE_MAX_AGE,
     COOKIE_NAME,
     guest_identifier_from_cookie,
     make_guest_cookie,
 )
+
+# CVE-2026-86099 mitigation: validate client-supplied session ids before
+# Chainlit can use them as filesystem directory names.
+apply_chainlit_session_guard()
 
 app = FastAPI()
 
