@@ -2,6 +2,7 @@ import ast
 import asyncio
 import base64
 import json
+import logging
 import math
 import operator
 import os
@@ -413,8 +414,10 @@ async def auto_title(first_text, model):
                 name=title,
                 user_id=getattr(user, "id", None),
             )
-    except Exception:
-        pass
+    except Exception as exc:
+        logging.getLogger(__name__).warning(
+            "Automatic chat title update failed (%s)", type(exc).__name__
+        )
 
 
 async def generate(work, settings, reply):

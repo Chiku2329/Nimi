@@ -1,0 +1,46 @@
+name: security-checks
+
+on:
+  push:
+    branches: [main, nimi-agent-foundation, "security/**"]
+  pull_request:
+    branches: [main, nimi-agent-foundation]
+  schedule:
+    - cron: "23 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tests-and-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+          cache: "pip"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m pip install pip-audit bandit
+      - name: Run automated tests
+        run: |
+          if [ -d tests ] && find tests -type f \( -name 'test_*.py' -o -name '*_test.py' \) -print -quit | grep -q .; then
+            python -m unittest discover -s tests -v
+          else
+            echo "No repository test files are present on this branch; skipping the test step."
+          fi
+      - name: Audit installed Python dependencies
+        run: pip-audit
+      - name: Scan application code for common security issues
+        run: bandit -q -r . -x ./tests,./.git
