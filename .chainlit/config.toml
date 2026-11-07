@@ -5,7 +5,7 @@ user_session_timeout = 1296000
 cache = false
 persist_user_env = false
 mask_user_env = false
-allow_origins = ["https://nimistaging.nimi.prod.page"]
+allow_origins = ["https://nimistaging.nimi.prod.page", "https://nimi.blitz.cloud"]
 
 [features]
 unsafe_allow_html = false
