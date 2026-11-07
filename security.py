@@ -8,30 +8,44 @@ REQUESTS_PER_MINUTE = 10
 GLOBAL_REQUESTS_PER_MINUTE = 120
 _GLOBAL_KEY = "__nimi_global_request_bucket__"
 
+_SQLITE_UPSERT = """
+INSERT INTO nimi_rate_limits (user_key, window_start, request_count)
+VALUES (?, ?, 1)
+ON CONFLICT(user_key) DO UPDATE SET
+    window_start = excluded.window_start,
+    request_count = CASE
+        WHEN nimi_rate_limits.window_start = excluded.window_start
+        THEN nimi_rate_limits.request_count + 1
+        ELSE 1
+    END
+"""
+_SQLITE_SELECT = "SELECT request_count FROM nimi_rate_limits WHERE user_key = ?"
 
-def _next_count(cursor, user_key, window_start, placeholder):
-    cursor.execute(
-        f"""
-        INSERT INTO nimi_rate_limits (user_key, window_start, request_count)
-        VALUES ({placeholder}, {placeholder}, 1)
-        ON CONFLICT(user_key) DO UPDATE SET
-            window_start = excluded.window_start,
-            request_count = CASE
-                WHEN nimi_rate_limits.window_start = excluded.window_start
-                THEN nimi_rate_limits.request_count + 1
-                ELSE 1
-            END
-        """,
-        (user_key, window_start),
-    )
-    result = cursor.execute(
-        f"SELECT request_count FROM nimi_rate_limits WHERE user_key = {placeholder}",
-        (user_key,),
-    )
-    # psycopg2 cursors expose fetchone() directly; sqlite3.Connection.execute()
-    # returns a cursor and the connection itself has no fetchone() method.
-    row = cursor.fetchone() if hasattr(cursor, "fetchone") else result.fetchone()
-    return row[0]
+_POSTGRES_UPSERT = """
+INSERT INTO nimi_rate_limits (user_key, window_start, request_count)
+VALUES (%s, %s, 1)
+ON CONFLICT (user_key) DO UPDATE SET
+    window_start = EXCLUDED.window_start,
+    request_count = CASE
+        WHEN nimi_rate_limits.window_start = EXCLUDED.window_start
+        THEN nimi_rate_limits.request_count + 1
+        ELSE 1
+    END
+RETURNING request_count
+"""
+_POSTGRES_SELECT = "SELECT request_count FROM nimi_rate_limits WHERE user_key = %s"
+
+
+def _next_count(cursor, user_key, window_start, sqlite_mode=False):
+    """Increment one counter using static, parameterized SQL for each driver."""
+    if sqlite_mode:
+        cursor.execute(_SQLITE_UPSERT, (user_key, window_start))
+        result = cursor.execute(_SQLITE_SELECT, (user_key,))
+        return result.fetchone()[0]
+
+    cursor.execute(_POSTGRES_UPSERT, (user_key, window_start))
+    # PostgreSQL's upsert returns the incremented count directly.
+    return cursor.fetchone()[0]
 
 
 def allow_chat_request(user_key: str, now: float | None = None) -> bool:
@@ -59,8 +73,8 @@ def allow_chat_request(user_key: str, now: float | None = None) -> bool:
 
         with psycopg2.connect(database_url) as con:
             with con.cursor() as cur:
-                guest_count = _next_count(cur, user_key, window_start, "%s")
-                global_count = _next_count(cur, _GLOBAL_KEY, window_start, "%s")
+                guest_count = _next_count(cur, user_key, window_start)
+                global_count = _next_count(cur, _GLOBAL_KEY, window_start)
                 if global_count % 100 == 0:
                     cur.execute(
                         "DELETE FROM nimi_rate_limits WHERE window_start < %s",
@@ -70,8 +84,8 @@ def allow_chat_request(user_key: str, now: float | None = None) -> bool:
         data_dir = os.environ.get("DATA_DIR", ".")
         db_path = os.path.join(data_dir, "chat.db")
         with sqlite3.connect(db_path, timeout=10) as con:
-            guest_count = _next_count(con, user_key, window_start, "?")
-            global_count = _next_count(con, _GLOBAL_KEY, window_start, "?")
+            guest_count = _next_count(con, user_key, window_start, sqlite_mode=True)
+            global_count = _next_count(con, _GLOBAL_KEY, window_start, sqlite_mode=True)
             if global_count % 100 == 0:
                 con.execute(
                     "DELETE FROM nimi_rate_limits WHERE window_start < ?",
