@@ -159,6 +159,30 @@ def _pg_connect():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
 
+MAX_MEMORY_ITEMS = 50
+MAX_MEMORY_FACT_CHARS = 500
+MAX_MEMORY_TOTAL_CHARS = 10000
+
+
+def normalize_memories(items):
+    """Keep per-guest memory bounded even if legacy rows or tool data are malformed."""
+    if not isinstance(items, (list, tuple)):
+        return []
+    cleaned = []
+    total = 0
+    for fact in items:
+        if not isinstance(fact, str):
+            continue
+        fact = fact.strip()
+        if not fact or len(fact) > MAX_MEMORY_FACT_CHARS or fact in cleaned:
+            continue
+        if len(cleaned) >= MAX_MEMORY_ITEMS or total + len(fact) > MAX_MEMORY_TOTAL_CHARS:
+            break
+        cleaned.append(fact)
+        total += len(fact)
+    return cleaned
+
+
 def get_memories():
     key = user_key()
     try:
@@ -167,18 +191,19 @@ def get_memories():
             try:
                 cur = con.cursor()
                 cur.execute(
-                    "SELECT fact FROM nimi_memories WHERE user_key = %s ORDER BY id",
-                    (key,),
+                    "SELECT fact FROM nimi_memories WHERE user_key = %s ORDER BY id DESC LIMIT %s",
+                    (key, MAX_MEMORY_ITEMS),
                 )
-                return [row[0] for row in cur.fetchall()]
+                return normalize_memories([row[0] for row in reversed(cur.fetchall())])
             finally:
                 con.close()
         con = sqlite3.connect(os.path.join(DATA_DIR, "chat.db"), timeout=10)
         try:
             rows = con.execute(
-                "SELECT fact FROM nimi_memories WHERE user_key = ? ORDER BY id", (key,)
+                "SELECT fact FROM nimi_memories WHERE user_key = ? ORDER BY id DESC LIMIT ?",
+                (key, MAX_MEMORY_ITEMS),
             ).fetchall()
-            return [row[0] for row in rows]
+            return normalize_memories([row[0] for row in reversed(rows)])
         finally:
             con.close()
     except Exception as e:
@@ -187,6 +212,7 @@ def get_memories():
 
 
 def set_memories(items):
+    items = normalize_memories(items)
     key = user_key()
     try:
         if os.environ.get("DATABASE_URL"):
@@ -311,10 +337,18 @@ async def get_weather(city: str):
 
 
 def remember(fact: str):
+    if not isinstance(fact, str) or not fact.strip() or len(fact) > MAX_MEMORY_FACT_CHARS:
+        return "That memory is invalid or too long to save."
+    fact = fact.strip()
     items = get_memories()
-    if fact not in items:
-        items.append(fact)
-        set_memories(items)
+    if fact in items:
+        return "That is already saved."
+    if len(items) >= MAX_MEMORY_ITEMS:
+        return "Your memory is full (50 items). Remove an old memory before saving another."
+    if sum(len(item) for item in items) + len(fact) > MAX_MEMORY_TOTAL_CHARS:
+        return "Your saved memory space is full. Remove an old memory before saving another."
+    items.append(fact)
+    set_memories(items)
     return "Saved."
 
 
