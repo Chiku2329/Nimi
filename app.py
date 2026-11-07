@@ -16,7 +16,7 @@ from chainlit.data.sql_alchemy import SQLAlchemyDataLayer
 from chainlit.input_widget import Select, Slider, Switch
 from chainlit.types import ThreadDict
 from openai import AsyncOpenAI
-from pypdf import PdfReader
+from uploads import UploadRejected, validate_upload_batch
 from guest_auth import guest_identifier_from_cookie
 from security import allow_chat_request
 
@@ -29,6 +29,7 @@ MODELS = ["gemini-flash-lite-latest", "gemini-flash-latest"]
 MAX_FILE_CHARS = 30000
 MAX_HISTORY = 20
 MAX_TOOL_ROUNDS = 3
+MAX_TOOL_CALLS_PER_ROUND = 3
 def pick_data_dir():
     wanted = os.environ.get("DATA_DIR", ".")
     try:
@@ -356,7 +357,8 @@ async def run_tool(name, args):
             return forget(args["keyword"])
         return f"Unknown tool: {name}"
     except Exception as e:
-        return f"Tool error: {e}"
+        print("tool execution failed:", type(e).__name__, flush=True)
+        return "The tool could not complete this request."
 
 
 # ---------- helpers ----------
@@ -376,17 +378,6 @@ def build_system_prompt():
     if mem:
         parts.append("Things the user asked you to remember:\n" + "\n".join(f"- {m}" for m in mem))
     return "\n\n".join(p for p in parts if p)
-
-
-def read_file(element):
-    name = element.name.lower()
-    if name.endswith(".pdf"):
-        reader = PdfReader(element.path)
-        text = "\n".join(page.extract_text() or "" for page in reader.pages)
-    else:
-        with open(element.path, "r", encoding="utf-8", errors="ignore") as f:
-            text = f.read()
-    return text[:MAX_FILE_CHARS]
 
 
 async def setup_settings():
@@ -460,7 +451,8 @@ async def generate(work, settings, reply):
             return
 
         results = []
-        for c in calls.values():
+        selected_calls = list(calls.values())[:MAX_TOOL_CALLS_PER_ROUND]
+        for c in selected_calls:
             try:
                 args = json.loads(c["args"] or "{}")
             except Exception:
@@ -545,7 +537,7 @@ async def main(message: cl.Message):
             ).send()
             return
     except Exception as e:
-        print("rate limit check failed:", e, flush=True)
+        print("rate limit check failed:", type(e).__name__, flush=True)
         await cl.Message(
             content="Nimi is temporarily unable to accept messages. Please try again shortly."
         ).send()
@@ -561,19 +553,20 @@ async def main(message: cl.Message):
 
     user_text = message.content
     image_parts, image_names = [], []
-    for element in message.elements or []:
-        try:
-            if element.mime and element.mime.startswith("image/"):
-                with open(element.path, "rb") as f:
-                    b64 = base64.b64encode(f.read()).decode()
-                image_parts.append(
-                    {"type": "image_url", "image_url": {"url": f"data:{element.mime};base64,{b64}"}}
-                )
-                image_names.append(element.name)
-            else:
-                user_text += f"\n\n[Attached file: {element.name}]\n{read_file(element)}"
-        except Exception as e:
-            await cl.Message(content=f"Could not read {element.name}: {e}").send()
+    try:
+        uploads = validate_upload_batch(message.elements or [])
+    except UploadRejected as e:
+        await cl.Message(content=str(e) + " Please remove the file and try again.").send()
+        return
+    for upload in uploads:
+        if upload["kind"] == "image":
+            b64 = base64.b64encode(upload["data"]).decode("ascii")
+            image_parts.append(
+                {"type": "image_url", "image_url": {"url": f"data:{upload['mime']};base64,{b64}"}}
+            )
+            image_names.append(upload["name"])
+        else:
+            user_text += f"\n\n[Attached file: {upload['name']}]\n{upload['text']}"
 
     if image_parts and not user_text.strip():
         user_text = "Describe this image."
@@ -589,7 +582,8 @@ async def main(message: cl.Message):
     try:
         await generate(work, settings, reply)
     except Exception as e:
-        await cl.Message(content=f"Error: {e}").send()
+        print("chat generation failed:", type(e).__name__, flush=True)
+        await cl.Message(content="Nimi encountered a temporary error. Please try again shortly.").send()
         return
 
     if not reply.content:
