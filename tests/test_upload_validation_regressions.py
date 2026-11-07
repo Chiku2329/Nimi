@@ -16,7 +16,7 @@ from uploads import (
 
 def png_bytes(size=(2, 2)):
     buffer = io.BytesIO()
-    Image.new("RGB", size, "white").save(buffer, format="PNG")
+    Image.new("1", size, 1).save(buffer, format="PNG")
     return buffer.getvalue()
 
 
@@ -34,12 +34,11 @@ class UploadValidationTests(unittest.TestCase):
         self.assertEqual(result[0]["kind"], "image")
 
     def test_rejects_valid_signature_with_invalid_image_data(self):
-        element = self.make_file("photo.png", "image/png", b"\\x89PNG\\r\\n\\x1a\\n" + b"x" * 8)
+        element = self.make_file("photo.png", "image/png", b"\x89PNG\r\n\x1a\n" + b"x" * 8)
         with self.assertRaises(UploadRejected):
             validate_upload_batch([element])
 
     def test_rejects_image_over_pixel_limit(self):
-        # A 1-bit image keeps the fixture small while exceeding the pixel budget.
         element = self.make_file("huge.png", "image/png", png_bytes((5001, 4000)))
         with self.assertRaises(UploadRejected):
             validate_upload_batch([element])
@@ -65,12 +64,12 @@ class UploadValidationTests(unittest.TestCase):
             validate_upload_batch([element])
 
     def test_rejects_binary_disguised_as_text(self):
-        element = self.make_file("file.txt", "text/plain", b"hello\\x00world")
+        element = self.make_file("file.txt", "text/plain", b"hello\x00world")
         with self.assertRaises(UploadRejected):
             validate_upload_batch([element])
 
     def test_rejects_invalid_utf8(self):
-        element = self.make_file("file.txt", "text/plain", b"\\xff\\xfe\\xfa")
+        element = self.make_file("file.txt", "text/plain", b"\xff\xfe\xfa")
         with self.assertRaises(UploadRejected):
             validate_upload_batch([element])
 
