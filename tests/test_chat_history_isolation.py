@@ -1,5 +1,6 @@
 """Regression tests for guest identity and persisted chat-history access control."""
 
+import os
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -10,6 +11,18 @@ from chainlit.data.acl import is_thread_author
 
 
 class GuestIdentityIsolationTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.secret_env = patch.dict(
+            os.environ,
+            {"NIMI_GUEST_SECRET": "test-only-secret-with-at-least-32-characters"},
+        )
+        cls.secret_env.start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.secret_env.stop()
+
     def test_each_browser_cookie_maps_to_a_distinct_guest_identity(self):
         first_cookie = make_guest_cookie()
         second_cookie = make_guest_cookie()
