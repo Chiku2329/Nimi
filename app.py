@@ -635,20 +635,20 @@ async def handle_command(cmd, argument=""):
             await cl.Message(content="Nothing to export yet.").send()
             return
         lines = [
-            f"**{'You' if m['role'] == 'user' else 'AI'}:**\\n{m['content']}\\n"
+            f"**{'You' if m['role'] == 'user' else 'AI'}:**\n{m['content']}\n"
             for m in history
         ]
         await cl.Message(
             content="Here is your chat export:",
             elements=[cl.File(name="chat-export.md",
-                              content="\\n".join(lines).encode("utf-8"),
+                              content="\n".join(lines).encode("utf-8"),
                               display="inline")],
         ).send()
     elif cmd == "/memory":
         mem = get_memories()
         if mem:
-            body = "Your saved memories (use /forget-memory NUMBER to remove one):\\n"
-            body += "\\n".join(f"{i}. {fact}" for i, fact in enumerate(mem, 1))
+            body = "Your saved memories (use /forget-memory NUMBER to remove one):\n"
+            body += "\n".join(f"{i}. {fact}" for i, fact in enumerate(mem, 1))
         else:
             body = "I have nothing saved yet."
         await cl.Message(content=body).send()
