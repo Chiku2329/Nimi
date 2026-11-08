@@ -44,13 +44,13 @@
   var manifestLink = document.querySelector('link[rel="manifest"]') || document.createElement("link");
   manifestLink.rel = "manifest";
   manifestLink.href = "/public/manifest.json?v=3";
-  document.head.appendChild(manifestLink);
+  if (!manifestLink.isConnected) document.head.appendChild(manifestLink);
 
   [["theme-color", "#0c0e14"], ["apple-mobile-web-app-capable", "yes"],
    ["apple-mobile-web-app-title", "Nimi"], ["mobile-web-app-capable", "yes"]]
     .forEach(function (p) {
       var m = document.querySelector('meta[name="' + p[0] + '"]') || document.createElement("meta");
-      m.name = p[0]; m.content = p[1]; document.head.appendChild(m);
+      m.name = p[0]; m.content = p[1];\n      if (!m.isConnected) document.head.appendChild(m);
     });
 
   var installEvent = null, button = null;
