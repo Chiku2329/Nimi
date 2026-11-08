@@ -52,6 +52,16 @@ async def nimi_favicon():
     )
 
 
+@app.get("/favicon.png", include_in_schema=False)
+async def nimi_favicon_png():
+    icon_path = Path(__file__).resolve().parent / "public" / "icon-192.png"
+    return FileResponse(
+        icon_path,
+        media_type="image/png",
+        headers={"Cache-Control": "no-cache, max-age=0"},
+    )
+
+
 @app.get("/guest-auth")
 async def guest_auth(request: Request):
     cookie_header = request.headers.get("cookie", "")
