@@ -69,6 +69,24 @@ A public anonymous app still needs abuse protection. If robust visitor-level rat
 - Consider a model router such as OmniRoute only after the basic agents are stable. Any paid provider must remain disabled unless explicitly enabled by the owner.
 - Do not expose an administration dashboard or router management API publicly.
 
+## Implementation notes
+
+The first agent-foundation implementation adds a server-owned registry for
+General, Coding Helper, Writing Helper, Study Tutor, Research Agent, Debugging
+Agent, Security Reviewer, and Testing Assistant. Each profile receives only
+its permitted tool definitions, and the server independently rejects tool
+calls outside that profile's allowlist. The existing Gemini-compatible client
+and model choices remain unchanged.
+
+The first release intentionally has no shell, arbitrary code execution,
+filesystem editing, deployment, or agent self-modification tools. Coding,
+debugging, security, and testing agents can generate recommendations and
+patches from visitor-provided material, but cannot run them.
+
+The browser favicon is served from Nimi's existing infinity SVG asset through
+the conventional `/favicon.ico` and `/favicon.svg` routes. This is separate
+from Chainlit's assistant logo setting.
+
 ## Development workflow
 
 - Use ECC (Everything Claude Code) as a developer-side coding workflow where supported by the developer's coding environment. ECC is not a runtime dependency of Nimi and does not provide model API credits.
