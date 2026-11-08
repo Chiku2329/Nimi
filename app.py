@@ -19,6 +19,7 @@ from openai import AsyncOpenAI
 from uploads import UploadRejected, validate_upload_batch
 from guest_auth import guest_identifier_from_cookie
 from security import allow_chat_request
+from agent_registry import get_agent_prompt, get_allowed_tools
 
 client = AsyncOpenAI(
     api_key=os.environ["API_KEY"],
@@ -101,6 +102,42 @@ PROFILES = {
             ("Teach me a topic", "Teach me the basics of supply chain management."),
             ("Quiz me", "Give me a 5-question quiz on project management."),
             ("Make a study plan", "Make me a 2-week study plan for learning data analytics."),
+        ],
+    },
+    "Research Agent": {
+        "desc": "Researches topics, compares sources and provides citations.",
+        "prompt": "",
+        "starters": [
+            ("Research a topic", "Research the latest developments in renewable energy and cite sources."),
+            ("Compare options", "Compare three project management methodologies and explain when each fits."),
+            ("Check a claim", "Find reliable sources that support or challenge this claim: "),
+        ],
+    },
+    "Debugging Agent": {
+        "desc": "Finds likely causes of errors and proposes safe code fixes.",
+        "prompt": "",
+        "starters": [
+            ("Diagnose an error", "I will share an error message. Help me identify its likely cause."),
+            ("Review a traceback", "Explain this Python traceback and suggest a minimal fix."),
+            ("Find a bug", "Review this code for bugs and edge cases: "),
+        ],
+    },
+    "Security Reviewer": {
+        "desc": "Reviews code for security and privacy weaknesses.",
+        "prompt": "",
+        "starters": [
+            ("Review code security", "Review this code for security vulnerabilities: "),
+            ("Check privacy risks", "Identify privacy and data-isolation risks in this design: "),
+            ("Threat model", "Create a concise threat model for this application: "),
+        ],
+    },
+    "Testing Assistant": {
+        "desc": "Designs test cases, regression checks and edge-case coverage.",
+        "prompt": "",
+        "starters": [
+            ("Write unit tests", "Design unit tests for this function: "),
+            ("Find edge cases", "List important edge cases for this feature: "),
+            ("Plan regression tests", "Create a regression test plan for this change: "),
         ],
     },
 }
@@ -405,8 +442,10 @@ TOOLS = [
 ]
 
 
-async def run_tool(name, args):
+async def run_tool(name, args, allowed_tools):
     try:
+        if name not in allowed_tools:
+            return "This agent is not permitted to use that tool."
         if not isinstance(args, dict):
             return "Invalid tool arguments."
         limits = {
@@ -448,6 +487,7 @@ def build_system_prompt():
     parts = [
         BASE_PROMPT,
         PROFILES.get(profile, {}).get("prompt", ""),
+        get_agent_prompt(profile),
         "Current time for the user: " + get_time(home_zone)
         + ". For the time in any other place, call get_time with the right IANA "
         "time zone name (for Canada use America/Toronto unless a city is named); "
@@ -540,7 +580,10 @@ async def auto_title(first_text, model, persisted_user_id=None):
         print("auto-title generation failed:", type(e).__name__, flush=True)
 
 
-async def generate(work, settings, reply):
+async def generate(work, settings, reply, allowed_tools):
+    available_tools = [
+        tool for tool in TOOLS if tool["function"]["name"] in allowed_tools
+    ]
     for round_no in range(MAX_TOOL_ROUNDS + 1):
         use_tools = settings.get("tools", True) and round_no < MAX_TOOL_ROUNDS
         kwargs = dict(
@@ -550,8 +593,8 @@ async def generate(work, settings, reply):
             messages=work,
             stream=True,
         )
-        if use_tools:
-            kwargs["tools"] = TOOLS
+        if use_tools and available_tools:
+            kwargs["tools"] = available_tools
         stream = await client.chat.completions.create(**kwargs)
 
         text = ""
@@ -586,7 +629,7 @@ async def generate(work, settings, reply):
                 args = {}
             async with cl.Step(name=c["name"], type="tool") as step:
                 step.input = json.dumps(args, ensure_ascii=False)
-                out = await run_tool(c["name"], args)
+                out = await run_tool(c["name"], args, allowed_tools)
                 step.output = out[:3000]
             results.append(f"Result of {c['name']}:\n{out[:6000]}")
 
@@ -693,6 +736,8 @@ async def main(message: cl.Message):
 
     history = cl.user_session.get("history")
     settings = normalize_settings(cl.user_session.get("settings"))
+    selected_profile = cl.user_session.get("chat_profile") or "General"
+    allowed_tools = get_allowed_tools(selected_profile, settings["tools"])
 
     user_text = message.content
     image_parts, image_names = [], []
@@ -723,7 +768,7 @@ async def main(message: cl.Message):
 
     reply = cl.Message(content="")
     try:
-        await generate(work, settings, reply)
+        await generate(work, settings, reply, allowed_tools)
     except Exception as e:
         print("chat generation failed:", type(e).__name__, flush=True)
         await cl.Message(content="Nimi encountered a temporary error. Please try again shortly.").send()
