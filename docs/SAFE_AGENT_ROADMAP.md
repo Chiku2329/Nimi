@@ -60,7 +60,7 @@ A public anonymous app still needs abuse protection. If robust visitor-level rat
 ### Phase 2 — Specialist agents
 
 - Add Research, Coding, and Debugging first.
-- Add Security and Testing after the first agents are tested.
+- Add Security Reviewer and Testing Assistant after the first agents are tested.
 - Make clear to visitors that coding assistance generates and reviews code but does not execute it.
 
 ### Phase 3 — Optional execution sandbox and model routing
