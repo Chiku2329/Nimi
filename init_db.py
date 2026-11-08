@@ -1,6 +1,8 @@
 import os
 import sqlite3
 
+from db_migrations import migrate_sqlite_schema
+
 PG_SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
     "id" UUID PRIMARY KEY,
@@ -118,7 +120,9 @@ CREATE TABLE IF NOT EXISTS steps (
     "showInput" TEXT,
     "language" TEXT,
     "indent" INTEGER,
-    "defaultOpen" INTEGER
+    "defaultOpen" INTEGER,
+    "autoCollapse" INTEGER,
+    "modes" TEXT
 );
 CREATE TABLE IF NOT EXISTS elements (
     "id" TEXT PRIMARY KEY,
@@ -184,6 +188,7 @@ else:
     data_dir = pick_data_dir()
     con = sqlite3.connect(os.path.join(data_dir, "chat.db"))
     con.executescript(SQLITE_SCHEMA)
+    migrate_sqlite_schema(con)
     con.commit()
     con.close()
     print("SQLite ready in", data_dir, flush=True)
