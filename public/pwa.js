@@ -34,8 +34,11 @@
 
   function applyBranding() { setBrandIcons(); }
   applyBranding();
+  // Watch for newly rendered UI elements, but do not observe href/src changes.
+  // setBrandIcons updates those attributes; observing them would retrigger this
+  // callback continuously and can freeze the browser on a blank/black screen.
   new MutationObserver(applyBranding).observe(document.documentElement, {
-    childList: true, subtree: true, attributes: true, attributeFilter: ["href", "src"]
+    childList: true, subtree: true
   });
 
   var manifestLink = document.querySelector('link[rel="manifest"]') || document.createElement("link");

@@ -2,10 +2,10 @@ import ast
 import asyncio
 import base64
 import json
-import logging
 import math
 import operator
 import os
+import sqlite3
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -16,17 +16,24 @@ from chainlit.data.sql_alchemy import SQLAlchemyDataLayer
 from chainlit.input_widget import Select, Slider, Switch
 from chainlit.types import ThreadDict
 from openai import AsyncOpenAI
-from pypdf import PdfReader
+from uploads import UploadRejected, validate_upload_batch
+from guest_auth import guest_identifier_from_cookie
+from security import allow_chat_request
 
 client = AsyncOpenAI(
     api_key=os.environ["API_KEY"],
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+    timeout=60.0,
+    max_retries=1,
 )
 
 MODELS = ["gemini-flash-lite-latest", "gemini-flash-latest"]
 MAX_FILE_CHARS = 30000
 MAX_HISTORY = 20
 MAX_TOOL_ROUNDS = 3
+MAX_TOOL_CALLS_PER_ROUND = 3
+MAX_OUTPUT_TOKENS = 2048
+MAX_MESSAGE_CHARS = 20000
 def pick_data_dir():
     wanted = os.environ.get("DATA_DIR", ".")
     try:
@@ -118,18 +125,12 @@ def init_data_layer():
     return SQLAlchemyDataLayer(conninfo=f"sqlite+aiosqlite:///{DATA_DIR}/chat.db")
 
 
-@cl.password_auth_callback
-def auth(username: str, password: str):
-    expected_user = os.environ.get("APP_USERNAME", "").strip()
-    expected_pass = os.environ.get("APP_PASSWORD", "").strip()
-    if (
-        expected_user
-        and expected_pass
-        and username.strip() == expected_user
-        and password.strip() == expected_pass
-    ):
-        return cl.User(identifier=username.strip(), metadata={"role": "user"})
-    return None
+@cl.header_auth_callback
+async def guest_header_auth(headers):
+    identifier = guest_identifier_from_cookie(headers.get("cookie"))
+    if not identifier:
+        return None
+    return cl.User(identifier=identifier, metadata={"role": "guest", "provider": "nimi"})
 
 
 @cl.set_chat_profiles
@@ -148,7 +149,9 @@ async def chat_profiles(current_user: cl.User):
 
 def user_key():
     user = cl.user_session.get("user")
-    return user.identifier if user else "default"
+    if not user or not user.identifier:
+        raise RuntimeError("A verified Nimi guest identity is required for private memory.")
+    return user.identifier
 
 
 def _pg_connect():
@@ -156,52 +159,86 @@ def _pg_connect():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
 
-def load_all_memories():
-    try:
-        with open(MEMORY_FILE, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+MAX_MEMORY_ITEMS = 50
+MAX_MEMORY_FACT_CHARS = 500
+MAX_MEMORY_TOTAL_CHARS = 10000
+
+
+def normalize_memories(items):
+    """Keep per-guest memory bounded even if legacy rows or tool data are malformed."""
+    if not isinstance(items, (list, tuple)):
+        return []
+    cleaned = []
+    total = 0
+    for fact in items:
+        if not isinstance(fact, str):
+            continue
+        fact = fact.strip()
+        if not fact or len(fact) > MAX_MEMORY_FACT_CHARS or fact in cleaned:
+            continue
+        if len(cleaned) >= MAX_MEMORY_ITEMS or total + len(fact) > MAX_MEMORY_TOTAL_CHARS:
+            break
+        cleaned.append(fact)
+        total += len(fact)
+    return cleaned
 
 
 def get_memories():
+    """Read this guest's memories; propagate storage failures instead of
+    pretending that a failed read means the guest has no saved memories.
+    """
+    key = user_key()
     if os.environ.get("DATABASE_URL"):
+        con = _pg_connect()
         try:
-            con = _pg_connect()
             cur = con.cursor()
             cur.execute(
-                "SELECT fact FROM nimi_memories WHERE user_key = %s ORDER BY id",
-                (user_key(),),
+                "SELECT fact FROM nimi_memories WHERE user_key = %s ORDER BY id DESC LIMIT %s",
+                (key, MAX_MEMORY_ITEMS),
             )
-            rows = [r[0] for r in cur.fetchall()]
+            return normalize_memories([row[0] for row in reversed(cur.fetchall())])
+        finally:
             con.close()
-            return rows
-        except Exception as e:
-            print("memory read error:", e, flush=True)
-            return []
-    return load_all_memories().get(user_key(), [])
+
+    con = sqlite3.connect(os.path.join(DATA_DIR, "chat.db"), timeout=10)
+    try:
+        rows = con.execute(
+            "SELECT fact FROM nimi_memories WHERE user_key = ? ORDER BY id DESC LIMIT ?",
+            (key, MAX_MEMORY_ITEMS),
+        ).fetchall()
+        return normalize_memories([row[0] for row in reversed(rows)])
+    finally:
+        con.close()
 
 
 def set_memories(items):
+    """Replace this guest's memories atomically; never hide a failed write."""
+    items = normalize_memories(items)
+    key = user_key()
     if os.environ.get("DATABASE_URL"):
+        con = _pg_connect()
         try:
-            con = _pg_connect()
             cur = con.cursor()
-            cur.execute("DELETE FROM nimi_memories WHERE user_key = %s", (user_key(),))
-            for fact in items:
-                cur.execute(
-                    "INSERT INTO nimi_memories (user_key, fact) VALUES (%s, %s)",
-                    (user_key(), fact),
-                )
+            cur.execute("DELETE FROM nimi_memories WHERE user_key = %s", (key,))
+            cur.executemany(
+                "INSERT INTO nimi_memories (user_key, fact) VALUES (%s, %s)",
+                [(key, fact) for fact in items],
+            )
             con.commit()
+        finally:
             con.close()
-        except Exception as e:
-            print("memory write error:", e, flush=True)
         return
-    data = load_all_memories()
-    data[user_key()] = items
-    with open(MEMORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+
+    con = sqlite3.connect(os.path.join(DATA_DIR, "chat.db"), timeout=10)
+    try:
+        with con:
+            con.execute("DELETE FROM nimi_memories WHERE user_key = ?", (key,))
+            con.executemany(
+                "INSERT INTO nimi_memories (user_key, fact) VALUES (?, ?)",
+                [(key, fact) for fact in items],
+            )
+    finally:
+        con.close()
 
 
 # ---------- tools ----------
@@ -237,8 +274,15 @@ def _eval(node):
 
 
 def calculate(expression: str):
+    if not isinstance(expression, str) or len(expression) > 256:
+        raise ValueError("expression too long")
     tree = ast.parse(expression.replace("^", "**"), mode="eval")
-    return str(_eval(tree.body))
+    if sum(1 for _ in ast.walk(tree)) > 80:
+        raise ValueError("expression too complex")
+    result = _eval(tree.body)
+    if isinstance(result, (int, float)) and (not math.isfinite(result) or abs(result) > 1e100):
+        raise ValueError("result out of range")
+    return str(result)
 
 
 def get_time(timezone_name: str):
@@ -292,10 +336,18 @@ async def get_weather(city: str):
 
 
 def remember(fact: str):
+    if not isinstance(fact, str) or not fact.strip() or len(fact) > MAX_MEMORY_FACT_CHARS:
+        return "That memory is invalid or too long to save."
+    fact = fact.strip()
     items = get_memories()
-    if fact not in items:
-        items.append(fact)
-        set_memories(items)
+    if fact in items:
+        return "That is already saved."
+    if len(items) >= MAX_MEMORY_ITEMS:
+        return "Your memory is full (50 items). Remove an old memory before saving another."
+    if sum(len(item) for item in items) + len(fact) > MAX_MEMORY_TOTAL_CHARS:
+        return "Your saved memory space is full. Remove an old memory before saving another."
+    items.append(fact)
+    set_memories(items)
     return "Saved."
 
 
@@ -335,21 +387,37 @@ TOOLS = [
 
 async def run_tool(name, args):
     try:
+        if not isinstance(args, dict):
+            return "Invalid tool arguments."
+        limits = {
+            "web_search": ("query", 300),
+            "calculate": ("expression", 256),
+            "get_weather": ("city", 100),
+            "get_time": ("timezone_name", 100),
+            "remember": ("fact", 500),
+            "forget": ("keyword", 100),
+        }
+        if name not in limits:
+            return "Unknown tool."
+        field, maximum = limits[name]
+        value = args.get(field)
+        if not isinstance(value, str) or not value.strip() or len(value) > maximum:
+            return "Invalid or oversized tool arguments."
         if name == "web_search":
-            return await web_search(args["query"])
+            return await web_search(value)
         if name == "calculate":
-            return calculate(args["expression"])
+            return calculate(value)
         if name == "get_weather":
-            return await get_weather(args["city"])
+            return await get_weather(value)
         if name == "get_time":
-            return get_time(args["timezone_name"])
+            return get_time(value)
         if name == "remember":
-            return remember(args["fact"])
+            return remember(value)
         if name == "forget":
-            return forget(args["keyword"])
-        return f"Unknown tool: {name}"
+            return forget(value)
     except Exception as e:
-        return f"Tool error: {e}"
+        print("tool execution failed:", type(e).__name__, flush=True)
+        return "The tool could not complete this request."
 
 
 # ---------- helpers ----------
@@ -371,15 +439,22 @@ def build_system_prompt():
     return "\n\n".join(p for p in parts if p)
 
 
-def read_file(element):
-    name = element.name.lower()
-    if name.endswith(".pdf"):
-        reader = PdfReader(element.path)
-        text = "\n".join(page.extract_text() or "" for page in reader.pages)
-    else:
-        with open(element.path, "r", encoding="utf-8", errors="ignore") as f:
-            text = f.read()
-    return text[:MAX_FILE_CHARS]
+def normalize_settings(settings):
+    """Treat browser-provided chat settings as untrusted input."""
+    settings = settings if isinstance(settings, dict) else {}
+    model = settings.get("model")
+    if model not in MODELS:
+        model = MODELS[0]
+    try:
+        temperature = float(settings.get("temperature", 0.7))
+    except (TypeError, ValueError):
+        temperature = 0.7
+    temperature = max(0.0, min(1.5, temperature))
+    return {
+        "model": model,
+        "temperature": temperature,
+        "tools": settings.get("tools", True) is True,
+    }
 
 
 async def setup_settings():
@@ -391,7 +466,7 @@ async def setup_settings():
             Switch(id="tools", label="Web search & tools", initial=True),
         ]
     ).send()
-    cl.user_session.set("settings", settings)
+    cl.user_session.set("settings", normalize_settings(settings))
 
 
 async def auto_title(first_text, model):
@@ -414,10 +489,8 @@ async def auto_title(first_text, model):
                 name=title,
                 user_id=getattr(user, "id", None),
             )
-    except Exception as exc:
-        logging.getLogger(__name__).warning(
-            "Automatic chat title update failed (%s)", type(exc).__name__
-        )
+    except Exception as e:
+        print("auto-title generation failed:", type(e).__name__, flush=True)
 
 
 async def generate(work, settings, reply):
@@ -426,6 +499,7 @@ async def generate(work, settings, reply):
         kwargs = dict(
             model=settings["model"],
             temperature=settings["temperature"],
+            max_tokens=MAX_OUTPUT_TOKENS,
             messages=work,
             stream=True,
         )
@@ -444,6 +518,8 @@ async def generate(work, settings, reply):
                 await reply.stream_token(delta.content)
             for tc in delta.tool_calls or []:
                 key = tc.index if tc.index is not None else len(calls)
+                if key >= MAX_TOOL_CALLS_PER_ROUND:
+                    continue
                 c = calls.setdefault(key, {"name": "", "args": ""})
                 if tc.function:
                     if tc.function.name:
@@ -455,7 +531,8 @@ async def generate(work, settings, reply):
             return
 
         results = []
-        for c in calls.values():
+        selected_calls = list(calls.values())[:MAX_TOOL_CALLS_PER_ROUND]
+        for c in selected_calls:
             try:
                 args = json.loads(c["args"] or "{}")
             except Exception:
@@ -503,7 +580,7 @@ async def on_chat_resume(thread: ThreadDict):
 
 @cl.on_settings_update
 async def on_settings_update(settings):
-    cl.user_session.set("settings", settings)
+    cl.user_session.set("settings", normalize_settings(settings))
 
 
 async def handle_command(cmd):
@@ -533,29 +610,49 @@ async def handle_command(cmd):
 
 @cl.on_message
 async def main(message: cl.Message):
+    try:
+        if not allow_chat_request(user_key()):
+            await cl.Message(
+                content="You've reached the message limit. Please wait a minute and try again."
+            ).send()
+            return
+    except Exception as e:
+        print("rate limit check failed:", type(e).__name__, flush=True)
+        await cl.Message(
+            content="Nimi is temporarily unable to accept messages. Please try again shortly."
+        ).send()
+        return
+
+    if len(message.content or "") > MAX_MESSAGE_CHARS:
+        await cl.Message(
+            content="That message is too long. Please keep messages under 20,000 characters."
+        ).send()
+        return
+
     cmd = message.content.strip().lower()
     if cmd in ("/export", "/memory", "/clear-memory"):
         await handle_command(cmd)
         return
 
     history = cl.user_session.get("history")
-    settings = cl.user_session.get("settings")
+    settings = normalize_settings(cl.user_session.get("settings"))
 
     user_text = message.content
     image_parts, image_names = [], []
-    for element in message.elements or []:
-        try:
-            if element.mime and element.mime.startswith("image/"):
-                with open(element.path, "rb") as f:
-                    b64 = base64.b64encode(f.read()).decode()
-                image_parts.append(
-                    {"type": "image_url", "image_url": {"url": f"data:{element.mime};base64,{b64}"}}
-                )
-                image_names.append(element.name)
-            else:
-                user_text += f"\n\n[Attached file: {element.name}]\n{read_file(element)}"
-        except Exception as e:
-            await cl.Message(content=f"Could not read {element.name}: {e}").send()
+    try:
+        uploads = validate_upload_batch(message.elements or [])
+    except UploadRejected as e:
+        await cl.Message(content=str(e) + " Please remove the file and try again.").send()
+        return
+    for upload in uploads:
+        if upload["kind"] == "image":
+            b64 = base64.b64encode(upload["data"]).decode("ascii")
+            image_parts.append(
+                {"type": "image_url", "image_url": {"url": f"data:{upload['mime']};base64,{b64}"}}
+            )
+            image_names.append(upload["name"])
+        else:
+            user_text += f"\n\n[Attached file: {upload['name']}]\n{upload['text']}"
 
     if image_parts and not user_text.strip():
         user_text = "Describe this image."
@@ -571,7 +668,8 @@ async def main(message: cl.Message):
     try:
         await generate(work, settings, reply)
     except Exception as e:
-        await cl.Message(content=f"Error: {e}").send()
+        print("chat generation failed:", type(e).__name__, flush=True)
+        await cl.Message(content="Nimi encountered a temporary error. Please try again shortly.").send()
         return
 
     if not reply.content:
