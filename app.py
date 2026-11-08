@@ -504,7 +504,7 @@ async def auto_title(first_text, model, persisted_user_id=None):
             messages=[{
                 "role": "user",
                 "content": "Write a title of 2 to 5 words for a chat that starts with "
-                           "this message. Reply with only the title, no quotes.\\n\\n"
+                           "this message. Reply with only the title, no quotes.\n\n"
                            + first_text[:500],
             }],
         )
