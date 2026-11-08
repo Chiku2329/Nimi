@@ -28,7 +28,7 @@ class MemoryCommandTests(unittest.TestCase):
         ), patch.object(self.app, "set_memories") as save:
             result = self.app.forget_memory_by_number("2")
 
-        self.assertEqual(result, "Removed memory 2: second private fact")
+        self.assertEqual(result, "Removed memory 2.")
         save.assert_called_once_with(["first private fact", "third private fact"])
 
     def test_forget_memory_rejects_missing_or_non_numeric_argument(self):
