@@ -366,8 +366,10 @@ def forget_memory_by_number(number: str):
     """Remove exactly one memory by its visible 1-based position."""
     if not isinstance(number, str) or not number.strip().isdigit():
         return "Use /forget-memory followed by a memory number, for example /forget-memory 2."
-    index = int(number.strip()) - 1
     items = get_memories()
+    if not items:
+        return "You have no saved memories to remove."
+    index = int(number.strip()) - 1
     if index < 0 or index >= len(items):
         return f"Choose a number between 1 and {len(items)}."
     removed = items.pop(index)
