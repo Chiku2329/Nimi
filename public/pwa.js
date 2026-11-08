@@ -50,7 +50,8 @@
    ["apple-mobile-web-app-title", "Nimi"], ["mobile-web-app-capable", "yes"]]
     .forEach(function (p) {
       var m = document.querySelector('meta[name="' + p[0] + '"]') || document.createElement("meta");
-      m.name = p[0]; m.content = p[1];\n      if (!m.isConnected) document.head.appendChild(m);
+      m.name = p[0]; m.content = p[1];
+      if (!m.isConnected) document.head.appendChild(m);
     });
 
   var installEvent = null, button = null;
