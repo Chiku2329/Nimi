@@ -372,9 +372,9 @@ def forget_memory_by_number(number: str):
     index = int(number.strip()) - 1
     if index < 0 or index >= len(items):
         return f"Choose a number between 1 and {len(items)}."
-    removed = items.pop(index)
+    items.pop(index)
     set_memories(items)
-    return f"Removed memory {index + 1}: {removed}"
+    return f"Removed memory {index + 1}."
 
 
 
