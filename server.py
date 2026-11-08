@@ -1,7 +1,9 @@
 """FastAPI entry point that silently provisions private guest sessions."""
 
+from pathlib import Path
+
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from chainlit.server import _authenticate_user
 from chainlit.user import User
 from chainlit.utils import mount_chainlit
@@ -35,6 +37,19 @@ async def send_login_page_to_guest_auth(request: Request, call_next):
     # Add defensive browser headers to normal responses and redirects alike.
     response.headers.update(build_security_headers(is_https=request.url.scheme == "https"))
     return response
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+@app.get("/favicon.svg", include_in_schema=False)
+async def nimi_favicon():
+    # Chainlit does not expose a favicon setting in config.toml. Serve Nimi's
+    # own infinity mark at the conventional browser favicon URLs instead.
+    icon_path = Path(__file__).resolve().parent / "public" / "nimi-infinity.svg"
+    return FileResponse(
+        icon_path,
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "no-cache, max-age=0"},
+    )
 
 
 @app.get("/guest-auth")
