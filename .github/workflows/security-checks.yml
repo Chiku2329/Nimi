@@ -35,6 +35,8 @@ jobs:
           python -m pip install pip-audit bandit
       - name: Run automated tests
         run: python -m unittest discover -s tests -v
+      - name: Check custom browser JavaScript syntax
+        run: node --check public/pwa.js
       - name: Audit installed Python dependencies
         run: pip-audit
       - name: Scan application code for common security issues

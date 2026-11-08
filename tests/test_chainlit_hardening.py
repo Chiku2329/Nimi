@@ -1,7 +1,7 @@
 import unittest
 import uuid
 
-from chainlit.session import BaseSession
+from chainlit.session import BaseSession, WebsocketSession
 from chainlit_hardening import apply_chainlit_session_guard, canonical_session_id
 
 
@@ -32,6 +32,18 @@ class SessionIdGuardTests(unittest.TestCase):
                     canonical_session_id(value)
                 with self.assertRaises(ConnectionRefusedError):
                     self.make_session(value)
+
+    def test_websocket_session_rejects_untrusted_client_session_id(self):
+        with self.assertRaises(ConnectionRefusedError):
+            WebsocketSession(
+                id="../../outside",
+                socket_id="test-socket",
+                emit=lambda *_args, **_kwargs: None,
+                emit_call=lambda *_args, **_kwargs: None,
+                user_env={},
+                client_type="webapp",
+                environ={},
+            )
 
     def test_rejects_noncanonical_uuid(self):
         with self.assertRaises(ConnectionRefusedError):
