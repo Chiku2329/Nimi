@@ -72,16 +72,17 @@ A public anonymous app still needs abuse protection. If robust visitor-level rat
 ## Implementation notes
 
 The first agent-foundation implementation adds a server-owned registry for
-General, Coding Helper, Writing Helper, Study Tutor, Research Agent, Debugging
-Agent, Security Reviewer, and Testing Assistant. Each profile receives only
-its permitted tool definitions, and the server independently rejects tool
-calls outside that profile's allowlist. The existing Gemini-compatible client
-and model choices remain unchanged.
+General, Coding Helper, Writing Helper, Study Tutor, Research Agent, and
+Debugging Agent. Each profile receives only its permitted tool definitions,
+and the server independently rejects tool calls outside that profile's
+allowlist. The existing Gemini-compatible client and model choices remain
+unchanged.
 
 The first release intentionally has no shell, arbitrary code execution,
-filesystem editing, deployment, or agent self-modification tools. Coding,
-debugging, security, and testing agents can generate recommendations and
-patches from visitor-provided material, but cannot run them.
+filesystem editing, deployment, or agent self-modification tools. Coding and
+debugging agents can generate recommendations and patches from visitor-provided
+material, but cannot run them. Security Reviewer and Testing Assistant remain
+planned for the next rollout after these agents are validated.
 
 The browser favicon is served from Nimi's existing infinity SVG asset through
 the conventional `/favicon.ico` and `/favicon.svg` routes. This is separate
