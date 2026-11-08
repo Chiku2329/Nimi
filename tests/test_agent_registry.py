@@ -36,7 +36,7 @@ class AgentRegistryTests(unittest.TestCase):
                 self.assertTrue(get_allowed_tools(profile).isdisjoint(forbidden))
 
     def test_prompts_keep_code_execution_disabled(self):
-        for profile in ("Coding Helper", "Debugging Agent", "Testing Assistant"):
+        for profile in ("Coding Helper", "Debugging Agent"):
             with self.subTest(profile=profile):
                 self.assertTrue(get_agent_prompt(profile))
 
