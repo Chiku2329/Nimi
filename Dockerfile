@@ -13,14 +13,15 @@ WORKDIR /home/user/app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Application code is read-only to the runtime account. Only persistent data
-# and Chainlit's upload directory are writable.
+# Application code is read-only to the runtime account. Only persistent data,
+# Chainlit's upload directory, and its runtime translations directory are writable.
 COPY --chown=root:root . .
-RUN mkdir -p /home/user/app/.files \
-    && chown -R user:user /data /home/user/app/.files \
+RUN mkdir -p /home/user/app/.files /home/user/app/.chainlit/translations \
+    && chown -R user:user /data /home/user/app/.files /home/user/app/.chainlit/translations \
     && chmod 700 /data /home/user/app/.files \
     && chmod -R a-w /home/user/app \
-    && chmod u+rwx /home/user/app/.files
+    && chmod u+rwx /home/user/app/.files \
+    && chmod -R u+rwX /home/user/app/.chainlit/translations
 
 USER user
 VOLUME ["/data"]
