@@ -352,10 +352,28 @@ def remember(fact: str):
 
 
 def forget(keyword: str):
+    if not isinstance(keyword, str) or not keyword.strip():
+        return "Please provide a word or phrase to remove."
     items = get_memories()
     kept = [m for m in items if keyword.lower() not in m.lower()]
-    set_memories(kept)
-    return f"Removed {len(items) - len(kept)} item(s)."
+    removed = len(items) - len(kept)
+    if removed:
+        set_memories(kept)
+    return f"Removed {removed} item(s)."
+
+
+def forget_memory_by_number(number: str):
+    """Remove exactly one memory by its visible 1-based position."""
+    if not isinstance(number, str) or not number.strip().isdigit():
+        return "Use /forget-memory followed by a memory number, for example /forget-memory 2."
+    index = int(number.strip()) - 1
+    items = get_memories()
+    if index < 0 or index >= len(items):
+        return f"Choose a number between 1 and {len(items)}."
+    removed = items.pop(index)
+    set_memories(items)
+    return f"Removed memory {index + 1}: {removed}"
+
 
 
 def fn(name, description, props, required):
@@ -610,29 +628,37 @@ async def on_settings_update(settings):
     cl.user_session.set("settings", normalize_settings(settings))
 
 
-async def handle_command(cmd):
+async def handle_command(cmd, argument=""):
     if cmd == "/export":
         history = cl.user_session.get("history")
         if not history:
             await cl.Message(content="Nothing to export yet.").send()
             return
         lines = [
-            f"**{'You' if m['role'] == 'user' else 'AI'}:**\n{m['content']}\n"
+            f"**{'You' if m['role'] == 'user' else 'AI'}:**\\n{m['content']}\\n"
             for m in history
         ]
         await cl.Message(
             content="Here is your chat export:",
             elements=[cl.File(name="chat-export.md",
-                              content="\n".join(lines).encode("utf-8"),
+                              content="\\n".join(lines).encode("utf-8"),
                               display="inline")],
         ).send()
     elif cmd == "/memory":
         mem = get_memories()
-        body = "\n".join(f"- {m}" for m in mem) if mem else "I have nothing saved yet."
+        if mem:
+            body = "Your saved memories (use /forget-memory NUMBER to remove one):\\n"
+            body += "\\n".join(f"{i}. {fact}" for i, fact in enumerate(mem, 1))
+        else:
+            body = "I have nothing saved yet."
         await cl.Message(content=body).send()
+    elif cmd == "/forget-memory":
+        result = forget_memory_by_number(argument)
+        await cl.Message(content=result).send()
     elif cmd == "/clear-memory":
         set_memories([])
-        await cl.Message(content="Memory cleared.").send()
+        await cl.Message(content="All saved memories for this browser identity have been cleared.").send()
+
 
 
 @cl.on_message
@@ -656,9 +682,11 @@ async def main(message: cl.Message):
         ).send()
         return
 
-    cmd = message.content.strip().lower()
-    if cmd in ("/export", "/memory", "/clear-memory"):
-        await handle_command(cmd)
+    command_parts = (message.content or "").strip().split(maxsplit=1)
+    cmd = command_parts[0].lower() if command_parts else ""
+    argument = command_parts[1].strip() if len(command_parts) > 1 else ""
+    if cmd in ("/export", "/memory", "/forget-memory", "/clear-memory"):
+        await handle_command(cmd, argument)
         return
 
     history = cl.user_session.get("history")
