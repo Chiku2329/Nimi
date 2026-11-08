@@ -23,6 +23,15 @@ The guest cookie is valid for one year and is marked Secure, HttpOnly, and SameS
 
 Clearing browser cookies, using a different browser profile, or switching devices creates a different guest identity. Without an optional recovery feature, the old guest's chats and memories cannot be linked to the new identity. Do not copy a guest cookie to another person: possession of the cookie grants access to that guest's history.
 
+## User memory commands
+
+- `/memory` lists saved facts for the current browser identity.
+- `/forget-memory NUMBER` removes one item from that list (for example, `/forget-memory 2`).
+- `/clear-memory` removes all saved facts for the current browser identity.
+- `/export` exports the current chat's in-memory conversation history.
+
+Removing a saved fact from Nimi memory does not erase the original message from the chat transcript. Delete the chat separately if you also want its conversation history removed.
+
 ## Before deploying
 
 1. Configure the required secrets in the hosting provider.
