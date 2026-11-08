@@ -469,7 +469,35 @@ async def setup_settings():
     cl.user_session.set("settings", normalize_settings(settings))
 
 
-async def auto_title(first_text, model):
+async def persist_current_thread_owner():
+    """Attach the active thread to the persisted guest account.
+
+    Chainlit's session User may not carry the database user ID. Resolve it
+    through the data layer rather than relying on user.id being populated.
+    """
+    try:
+        dl = cl_get_data_layer()
+        user = cl.user_session.get("user")
+        if not dl or not user or not user.identifier:
+            raise RuntimeError("Missing data layer or authenticated guest identity")
+
+        persisted_user = await dl.get_user(identifier=user.identifier)
+        if not persisted_user:
+            persisted_user = await dl.create_user(user)
+        if not persisted_user or not persisted_user.id:
+            raise RuntimeError("Guest user could not be persisted")
+
+        await dl.update_thread(
+            thread_id=cl.context.session.thread_id,
+            user_id=persisted_user.id,
+        )
+        return persisted_user.id
+    except Exception as e:
+        print("thread ownership persistence failed:", type(e).__name__, flush=True)
+        return None
+
+
+async def auto_title(first_text, model, persisted_user_id=None):
     try:
         r = await client.chat.completions.create(
             model=model,
@@ -482,12 +510,11 @@ async def auto_title(first_text, model):
         )
         title = (r.choices[0].message.content or "").strip().strip('"').strip("'")[:50]
         dl = cl_get_data_layer()
-        user = cl.user_session.get("user")
-        if title and dl:
+        if title and dl and persisted_user_id:
             await dl.update_thread(
                 thread_id=cl.context.session.thread_id,
                 name=title,
-                user_id=getattr(user, "id", None),
+                user_id=persisted_user_id,
             )
     except Exception as e:
         print("auto-title generation failed:", type(e).__name__, flush=True)
@@ -685,4 +712,5 @@ async def main(message: cl.Message):
 
     if not cl.user_session.get("titled"):
         cl.user_session.set("titled", True)
-        await auto_title(user_text, settings["model"])
+        persisted_user_id = await persist_current_thread_owner()
+        await auto_title(user_text, settings["model"], persisted_user_id)
