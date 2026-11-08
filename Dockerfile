@@ -26,4 +26,4 @@ RUN mkdir -p /home/user/app/.files /home/user/app/.chainlit/translations \
 USER user
 VOLUME ["/data"]
 EXPOSE 7860
-CMD ["sh", "-c", "umask 077 && python init_db.py && uvicorn server:app --host 0.0.0.0 --port ${PORT:-7860}"]
+CMD ["sh", "-c", "umask 077 && find /home/user/app/.chainlit/translations -maxdepth 1 -type f -name '*.json' -delete && python init_db.py && uvicorn server:app --host 0.0.0.0 --port ${PORT:-7860}"]
