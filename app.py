@@ -122,24 +122,6 @@ PROFILES = {
             ("Find a bug", "Review this code for bugs and edge cases: "),
         ],
     },
-    "Security Reviewer": {
-        "desc": "Reviews code for security and privacy weaknesses.",
-        "prompt": "",
-        "starters": [
-            ("Review code security", "Review this code for security vulnerabilities: "),
-            ("Check privacy risks", "Identify privacy and data-isolation risks in this design: "),
-            ("Threat model", "Create a concise threat model for this application: "),
-        ],
-    },
-    "Testing Assistant": {
-        "desc": "Designs test cases, regression checks and edge-case coverage.",
-        "prompt": "",
-        "starters": [
-            ("Write unit tests", "Design unit tests for this function: "),
-            ("Find edge cases", "List important edge cases for this feature: "),
-            ("Plan regression tests", "Create a regression test plan for this change: "),
-        ],
-    },
 }
 
 
