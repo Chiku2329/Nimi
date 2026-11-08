@@ -4,6 +4,36 @@
   var touchIcon = "/public/icon-512.png?v=3";
   var wordmark = "/public/nimi-logo.svg?v=3";
 
+  // Recover once if Chainlit's silent guest-auth callback never finishes loading /user.
+  // The callback route is intentionally blank while authentication is resolving;
+  // a stale/missing JWT can otherwise leave the browser there indefinitely.
+  function recoverStuckGuestAuth() {
+    if (window.location.pathname !== "/login/callback") return;
+    var params = new URLSearchParams(window.location.search);
+    if ((params.get("success") || "").toLowerCase() !== "true") return;
+
+    var key = "nimi_guest_auth_retry_at";
+    var now = Date.now();
+    try {
+      var previous = Number(window.sessionStorage.getItem(key) || 0);
+      // One retry per 30 seconds prevents redirect loops if auth is genuinely down.
+      if (previous && now - previous < 30000) return;
+      window.sessionStorage.setItem(key, String(now));
+    } catch (_) {
+      // Do not retry when session storage is unavailable: we cannot safely
+      // remember the attempt and therefore cannot guarantee a bounded retry.
+      return;
+    }
+
+    window.setTimeout(function () {
+      if (window.location.pathname === "/login/callback") {
+        window.location.replace("/guest-auth");
+      }
+    }, 8000);
+  }
+
+  recoverStuckGuestAuth();
+
   function upsertLink(rel, href, type, sizes) {
     var selector = 'link[rel="' + rel + '"]';
     var links = document.querySelectorAll(selector);
