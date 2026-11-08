@@ -5,7 +5,7 @@ def build_security_headers(is_https: bool = False) -> dict[str, str]:
     """Return headers that do not interfere with Chainlit's scripts or sockets."""
     headers = {
         "X-Content-Type-Options": "nosniff",
-        "X-Frame-Options": "DENY",
+        "Content-Security-Policy": "frame-ancestors 'self' https://dashboard.blitz.cloud https://*.blitz.cloud https://*.prod.page",
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
         "X-Permitted-Cross-Domain-Policies": "none",
