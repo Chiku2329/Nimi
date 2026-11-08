@@ -48,23 +48,6 @@ AGENTS = MappingProxyType({
         ),
         "tools": frozenset({"calculate", "remember", "forget"}),
     },
-    "Security Reviewer": {
-        "prompt": (
-            "You are Nimi's Security Reviewer. Review user-provided code and architecture "
-            "for vulnerabilities, trust boundaries, privacy leaks, and unsafe defaults. "
-            "Prioritize findings by severity and provide actionable remediations. Do not "
-            "execute code or access external systems."
-        ),
-        "tools": frozenset({"remember", "forget"}),
-    },
-    "Testing Assistant": {
-        "prompt": (
-            "You are Nimi's Testing Assistant. Design focused unit, integration, and "
-            "regression tests; identify edge cases and expected outcomes. You may write "
-            "test code, but must not execute it or claim it passed."
-        ),
-        "tools": frozenset({"calculate", "remember", "forget"}),
-    },
 })
 
 ALL_TOOL_NAMES = frozenset({
