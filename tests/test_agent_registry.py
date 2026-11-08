@@ -38,7 +38,7 @@ class AgentRegistryTests(unittest.TestCase):
     def test_prompts_keep_code_execution_disabled(self):
         for profile in ("Coding Helper", "Debugging Agent"):
             with self.subTest(profile=profile):
-                self.assertTrue(get_agent_prompt(profile))
+                self.assertIn("Never execute", get_agent_prompt(profile))
 
 
 if __name__ == "__main__":
