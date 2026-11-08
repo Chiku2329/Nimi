@@ -67,6 +67,23 @@ class SQLiteMigrationTests(unittest.TestCase):
         finally:
             connection.close()
 
+    def test_preserves_existing_optional_column_values(self):
+        connection = self.make_connection()
+        try:
+            connection.execute(
+                'ALTER TABLE steps ADD COLUMN "autoCollapse" INTEGER'
+            )
+            connection.execute(
+                "UPDATE steps SET autoCollapse = 1 WHERE id = 'step-1'"
+            )
+            migrate_sqlite_schema(connection)
+            value = connection.execute(
+                "SELECT autoCollapse FROM steps WHERE id = 'step-1'"
+            ).fetchone()[0]
+            self.assertEqual(value, 1)
+        finally:
+            connection.close()
+
     def test_fails_clearly_if_steps_table_is_missing(self):
         connection = sqlite3.connect(":memory:")
         try:
