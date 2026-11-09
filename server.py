@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from chainlit.server import _authenticate_user
 from chainlit.user import User
@@ -11,6 +11,7 @@ from chainlit.utils import mount_chainlit
 from chainlit_hardening import apply_chainlit_session_guard
 from chainlit_compat import apply_chat_profile_config_compat
 from response_security import build_security_headers
+from file_storage import attachment_media_type, get_storage_client
 
 from guest_auth import (
     COOKIE_MAX_AGE,
@@ -27,6 +28,29 @@ apply_chainlit_session_guard()
 apply_chat_profile_config_compat()
 
 app = FastAPI()
+
+
+
+@app.get("/private-storage/{object_key:path}", include_in_schema=False)
+async def serve_private_attachment(object_key: str, expires: int, signature: str):
+    """Serve an attachment only through a short-lived, signed storage URL."""
+    try:
+        path = get_storage_client().resolve_signed_file(object_key, expires, signature)
+    except (ValueError, FileNotFoundError):
+        # Do not reveal whether an object key exists to an unauthenticated caller.
+        raise HTTPException(status_code=404, detail="Attachment not found.") from None
+
+    return FileResponse(
+        path,
+        media_type=attachment_media_type(path),
+        filename=path.name,
+        content_disposition_type="inline",
+        headers={
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Referrer-Policy": "no-referrer",
+        },
+    )
 
 
 @app.middleware("http")

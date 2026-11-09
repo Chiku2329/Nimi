@@ -1,30 +1,29 @@
-# Chainlit storage warning
+# Chainlit storage
 
-Nimi currently uses PostgreSQL through Chainlit's `SQLAlchemyDataLayer` for
-chat users, threads, messages, and steps. The data layer is intentionally
-created without a blob-storage provider because no persistent object-storage
-service is configured for this app.
+Nimi uses PostgreSQL through Chainlit's `SQLAlchemyDataLayer` for users,
+threads, messages, steps, and attachment metadata.
 
-Chainlit's warning:
+Attachment bytes are stored by Nimi's `PrivateLocalStorageClient` under
+`NIMI_STORAGE_DIR`, defaulting to `$DATA_DIR/elements` (normally
+`/data/elements` on Blitz). This provider is passed to
+`SQLAlchemyDataLayer(storage_provider=...)`, so the
+`SQLAlchemyDataLayer storage client is not initialized` warning should no
+longer appear after the new version is deployed.
 
-```
-SQLAlchemyDataLayer storage client is not initialized and elements will not be persisted!
-```
+The storage directory is not exposed as public static content. The provider
+returns short-lived HMAC-signed URLs; FastAPI validates each URL before
+serving a file. Object keys are path-validated, and uploads continue to pass
+through Nimi's existing file validation and size limits.
 
-is therefore expected. It does **not** mean PostgreSQL chat-message history
-is disabled. It does mean Chainlit file elements (for example, uploaded files
-or generated downloadable elements) are not durably stored by the data layer.
+## Operational requirements
 
-Nimi reads supported uploads during the active message and passes extracted
-text or image data to the model. That request-time processing is separate from
-retaining the original attachment for later reopening from chat history.
-
-Do not silence this warning or point file storage at an unverified directory.
-Durable attachment history requires a configured, access-controlled blob
-storage provider (or a separately reviewed persistent local-storage adapter).
-Any future provider must preserve guest isolation, enforce safe object keys,
-and serve reads only to the owning guest. Configure and test that provider
-before claiming that attachments survive refreshes.
-
-The current deployment's PostgreSQL and `/data` contents must not be reset or
-migrated as part of this work.
+- Keep `DATA_DIR` on Blitz's persistent app storage volume.
+- Do not mount `NIMI_STORAGE_DIR` as public/static content.
+- Signing uses `NIMI_STORAGE_SECRET`, falling back to the existing
+  `NIMI_GUEST_SECRET` or `CHAINLIT_AUTH_SECRET`; no additional secret is
+  required if either existing secret is configured.
+- Signed URLs expire after `STORAGE_EXPIRY_TIME` (one hour by default).
+  Opening a thread again generates fresh URLs.
+- Existing PostgreSQL data and `/data` must not be reset or migrated.
+- Attachments uploaded before this provider was enabled were not retained by
+  the old data layer and cannot be restored retroactively.

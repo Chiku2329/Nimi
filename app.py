@@ -21,6 +21,7 @@ from uploads import UploadRejected, validate_upload_batch
 from guest_auth import guest_identifier_from_cookie
 from security import allow_chat_request
 from agent_registry import get_agent_prompt, get_allowed_tools
+from file_storage import get_storage_client
 
 client = AsyncOpenAI(
     api_key=os.environ["API_KEY"],
@@ -54,6 +55,7 @@ def pick_data_dir():
 
 
 DATA_DIR = pick_data_dir()
+os.environ.setdefault("NIMI_STORAGE_DIR", os.path.join(DATA_DIR, "elements"))
 print("Data folder:", DATA_DIR, flush=True)
 MEMORY_FILE = os.path.join(DATA_DIR, "memory.json")
 
@@ -144,9 +146,13 @@ def pg_async_url():
 @cl.data_layer
 def init_data_layer():
     url = pg_async_url()
+    storage_provider = get_storage_client(os.environ["NIMI_STORAGE_DIR"])
     if url:
-        return SQLAlchemyDataLayer(conninfo=url)
-    return SQLAlchemyDataLayer(conninfo=f"sqlite+aiosqlite:///{DATA_DIR}/chat.db")
+        return SQLAlchemyDataLayer(conninfo=url, storage_provider=storage_provider)
+    return SQLAlchemyDataLayer(
+        conninfo=f"sqlite+aiosqlite:///{DATA_DIR}/chat.db",
+        storage_provider=storage_provider,
+    )
 
 
 @cl.header_auth_callback
