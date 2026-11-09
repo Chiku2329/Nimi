@@ -50,11 +50,12 @@ class PrivateLocalStorageTests(unittest.TestCase):
             parsed = urlparse(url)
             query = parse_qs(parsed.query)
             signature = query["signature"][0]
+            tampered = ("0" if signature[0] != "0" else "1") + signature[1:]
             with self.assertRaises(ValueError):
                 self.storage.resolve_signed_file(
                     "user/element/file.txt",
                     int(query["expires"][0]),
-                    "0" + signature[1:],
+                    tampered,
                 )
 
         asyncio.run(run())
