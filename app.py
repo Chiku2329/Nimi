@@ -16,6 +16,7 @@ from chainlit.data.sql_alchemy import SQLAlchemyDataLayer
 from chainlit.input_widget import Select, Slider, Switch
 from chainlit.types import ThreadDict
 from openai import AsyncOpenAI
+from model_router import ModelRouter
 from uploads import UploadRejected, validate_upload_batch
 from guest_auth import guest_identifier_from_cookie
 from security import allow_chat_request
@@ -25,16 +26,20 @@ client = AsyncOpenAI(
     api_key=os.environ["API_KEY"],
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
     timeout=60.0,
-    max_retries=1,
+    max_retries=0,
 )
 
-MODELS = ["gemini-flash-lite-latest", "gemini-flash-latest"]
+MODELS = ["gemini-flash-latest", "gemini-flash-lite-latest"]
 MAX_FILE_CHARS = 30000
 MAX_HISTORY = 20
 MAX_TOOL_ROUNDS = 3
 MAX_TOOL_CALLS_PER_ROUND = 3
 MAX_OUTPUT_TOKENS = 2048
 MAX_MESSAGE_CHARS = 20000
+
+# Gemini remains the primary provider. OpenRouter is optional and is hard-pinned
+# to its free-only router; no paid OpenRouter model ID is accepted by this app.
+model_router = ModelRouter(client, openrouter_api_key=os.environ.get("OPENROUTER_API_KEY"))
 def pick_data_dir():
     wanted = os.environ.get("DATA_DIR", ".")
     try:
@@ -541,7 +546,7 @@ async def persist_current_thread_owner():
 
 async def auto_title(first_text, model, persisted_user_id=None):
     try:
-        r = await client.chat.completions.create(
+        r, route = await model_router.create_completion(
             model=model,
             messages=[{
                 "role": "user",
@@ -549,6 +554,7 @@ async def auto_title(first_text, model, persisted_user_id=None):
                            "this message. Reply with only the title, no quotes.\n\n"
                            + first_text[:500],
             }],
+            max_tokens=40,
         )
         title = (r.choices[0].message.content or "").strip().strip('"').strip("'")[:50]
         dl = cl_get_data_layer()
@@ -573,32 +579,29 @@ async def generate(work, settings, reply, allowed_tools):
             temperature=settings["temperature"],
             max_tokens=MAX_OUTPUT_TOKENS,
             messages=work,
-            stream=True,
         )
         if use_tools and available_tools:
             kwargs["tools"] = available_tools
-        stream = await client.chat.completions.create(**kwargs)
 
-        text = ""
+        # Buffer each provider response before displaying it. This lets Nimi
+        # safely retry on another free model without duplicating partial text.
+        response, route = await model_router.create_completion(**kwargs)
+        message = response.choices[0].message
+        text = message.content or ""
+        if text:
+            for offset in range(0, len(text), 80):
+                await reply.stream_token(text[offset:offset + 80])
+
         calls = {}
-        async for chunk in stream:
-            if not chunk.choices:
-                continue
-            delta = chunk.choices[0].delta
-            if delta.content:
-                text += delta.content
-                await reply.stream_token(delta.content)
-            for tc in delta.tool_calls or []:
-                key = tc.index if tc.index is not None else len(calls)
-                if key >= MAX_TOOL_CALLS_PER_ROUND:
-                    continue
-                c = calls.setdefault(key, {"name": "", "args": ""})
-                if tc.function:
-                    if tc.function.name:
-                        c["name"] += tc.function.name
-                    if tc.function.arguments:
-                        c["args"] += tc.function.arguments
+        for index, tool_call in enumerate(message.tool_calls or []):
+            if index >= MAX_TOOL_CALLS_PER_ROUND:
+                break
+            calls[index] = {
+                "name": tool_call.function.name or "",
+                "args": tool_call.function.arguments or "{}",
+            }
 
+        print("model route used:", route, flush=True)
         if not calls:
             return
 
@@ -623,6 +626,7 @@ async def generate(work, settings, reply, allowed_tools):
                        + "\n\nNow answer the user's last request using these results. "
                          "Cite source links if you used web search.",
         })
+
 
 
 # ---------- chat events ----------
