@@ -50,6 +50,15 @@ class ModelRouter:
         openrouter_client: Any | None = None,
     ):
         self.gemini_client = gemini_client
+        # A short timeout on the primary prevents a degraded Flash endpoint
+        # from holding the user request for the full shared-client timeout.
+        self.primary_client = (
+            gemini_client.with_options(timeout=8.0)
+            if callable(getattr(gemini_client, "with_options", None))
+            else gemini_client
+        )
+        self.primary_cooldown_seconds = 120.0
+        self.primary_cooldown_until = 0.0
         self.openrouter_client = openrouter_client
         key = (openrouter_api_key or "").strip()
         if key and self.openrouter_client is None:
@@ -63,8 +72,15 @@ class ModelRouter:
     def targets(self, preferred_model: str | None = None) -> list[ModelTarget]:
         preferred = preferred_model if preferred_model in GEMINI_MODELS else GEMINI_MODELS[0]
         order = (preferred,) + tuple(model for model in GEMINI_MODELS if model != preferred)
+        cooling_down = time.monotonic() < self.primary_cooldown_until
+        if cooling_down:
+            order = tuple(model for model in order if model != GEMINI_MODELS[0])
         targets = [
-            ModelTarget(f"Google Gemini ({model})", self.gemini_client, model)
+            ModelTarget(
+                f"Google Gemini ({model})",
+                self.primary_client if model == GEMINI_MODELS[0] else self.gemini_client,
+                model,
+            )
             for model in order
         ]
         if self.openrouter_client is not None:
@@ -72,6 +88,15 @@ class ModelRouter:
                 ModelTarget("OpenRouter free fallback", self.openrouter_client, OPENROUTER_FREE_MODEL)
             )
         return targets
+
+    def _record_provider_failure(self, target: ModelTarget, error: Exception) -> None:
+        if target.model == GEMINI_MODELS[0] and is_retryable_provider_error(error):
+            self.primary_cooldown_until = time.monotonic() + self.primary_cooldown_seconds
+            print(
+                f"model circuit open: {target.name} for "
+                f"{self.primary_cooldown_seconds:.0f}s after {type(error).__name__}",
+                flush=True,
+            )
 
     async def create_completion(self, **kwargs: Any):
         """Non-streaming completion, used for short background tasks such as titles."""
@@ -89,6 +114,7 @@ class ModelRouter:
                 last_error = error
                 if not is_retryable_provider_error(error):
                     raise
+                self._record_provider_failure(target, error)
                 print(
                     "model provider temporarily unavailable; trying next free route:",
                     target.name, type(error).__name__, flush=True
@@ -123,6 +149,8 @@ class ModelRouter:
             except Exception as error:
                 last_error = error
                 elapsed = time.perf_counter() - started_at
+                if not emitted:
+                    self._record_provider_failure(target, error)
                 if emitted or not is_retryable_provider_error(error):
                     print(
                         f"model stream failed: {target.name} after {elapsed:.2f}s "

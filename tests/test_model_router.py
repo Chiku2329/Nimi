@@ -1,6 +1,6 @@
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 from model_router import (
     GEMINI_MODELS,
@@ -75,6 +75,25 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(is_retryable_provider_error(ProviderError(code)))
         for code in (400, 401, 403, 404):
             self.assertFalse(is_retryable_provider_error(ProviderError(code)))
+
+    async def test_primary_cooldown_skips_flash_until_cooldown_expires(self):
+        gemini = self.make_client([ProviderError(503), object()])
+        router = ModelRouter(gemini)
+        with patch("model_router.time.monotonic", return_value=1000.0):
+            _, route = await router.create_completion(messages=[])
+            self.assertIn("gemini-flash-lite-latest", route)
+            self.assertEqual(router.targets()[0].model, "gemini-flash-lite-latest")
+        with patch("model_router.time.monotonic", return_value=1121.0):
+            self.assertEqual(router.targets()[0].model, "gemini-flash-latest")
+
+    async def test_primary_timeout_is_shortened_when_client_supports_options(self):
+        gemini = self.make_client([])
+        gemini.with_options = lambda **kwargs: SimpleNamespace(
+            chat=gemini.chat, timeout=kwargs["timeout"]
+        )
+        router = ModelRouter(gemini)
+        self.assertEqual(router.targets()[0].client.timeout, 8.0)
+        self.assertIs(router.targets()[1].client, gemini)
 
 
 if __name__ == "__main__":
