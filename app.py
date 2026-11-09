@@ -583,23 +583,25 @@ async def generate(work, settings, reply, allowed_tools):
         if use_tools and available_tools:
             kwargs["tools"] = available_tools
 
-        # Buffer each provider response before displaying it. This lets Nimi
-        # safely retry on another free model without duplicating partial text.
-        response, route = await model_router.create_completion(**kwargs)
-        message = response.choices[0].message
-        text = message.content or ""
-        if text:
-            for offset in range(0, len(text), 80):
-                await reply.stream_token(text[offset:offset + 80])
-
+        text = ""
         calls = {}
-        for index, tool_call in enumerate(message.tool_calls or []):
-            if index >= MAX_TOOL_CALLS_PER_ROUND:
-                break
-            calls[index] = {
-                "name": tool_call.function.name or "",
-                "args": tool_call.function.arguments or "{}",
-            }
+        async for chunk, route in model_router.stream_completion(**kwargs):
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta.content:
+                text += delta.content
+                await reply.stream_token(delta.content)
+            for tc in delta.tool_calls or []:
+                key = tc.index if tc.index is not None else len(calls)
+                if key >= MAX_TOOL_CALLS_PER_ROUND:
+                    continue
+                call = calls.setdefault(key, {"name": "", "args": ""})
+                if tc.function:
+                    if tc.function.name:
+                        call["name"] += tc.function.name
+                    if tc.function.arguments:
+                        call["args"] += tc.function.arguments
 
         print("model route used:", route, flush=True)
         if not calls:
