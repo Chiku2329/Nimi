@@ -9,6 +9,7 @@ from chainlit.user import User
 from chainlit.utils import mount_chainlit
 
 from chainlit_hardening import apply_chainlit_session_guard
+from chainlit_compat import apply_chat_profile_config_compat
 from response_security import build_security_headers
 
 from guest_auth import (
@@ -21,6 +22,9 @@ from guest_auth import (
 # CVE-2026-86099 mitigation: validate client-supplied session ids before
 # Chainlit can use them as filesystem directory names.
 apply_chainlit_session_guard()
+# Nimi profiles do not use Chainlit config_overrides; avoid Chainlit 2.12.0's
+# run_until_complete call against the async profile callback on a live loop.
+apply_chat_profile_config_compat()
 
 app = FastAPI()
 
