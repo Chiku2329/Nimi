@@ -39,6 +39,7 @@ async def send_login_page_to_guest_auth(request: Request, call_next):
     return response
 
 
+@app.get("/favicon", include_in_schema=False)
 @app.get("/favicon.ico", include_in_schema=False)
 @app.get("/favicon.svg", include_in_schema=False)
 async def nimi_favicon():
