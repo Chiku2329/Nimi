@@ -2,6 +2,7 @@ import os
 import sqlite3
 
 from db_migrations import migrate_sqlite_schema
+from data_directory import resolve_data_dir
 
 PG_SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
@@ -160,19 +161,6 @@ CREATE TABLE IF NOT EXISTS nimi_rate_limits (
 """
 
 
-def pick_data_dir():
-    wanted = os.environ.get("DATA_DIR", ".")
-    try:
-        os.makedirs(wanted, exist_ok=True)
-        test_file = os.path.join(wanted, ".write_test")
-        with open(test_file, "w") as f:
-            f.write("ok")
-        os.remove(test_file)
-        return wanted
-    except Exception:
-        return "."
-
-
 database_url = os.environ.get("DATABASE_URL", "").strip()
 
 if database_url:
@@ -185,7 +173,7 @@ if database_url:
     con.close()
     print("Postgres ready", flush=True)
 else:
-    data_dir = pick_data_dir()
+    data_dir = resolve_data_dir()
     con = sqlite3.connect(os.path.join(data_dir, "chat.db"))
     con.executescript(SQLITE_SCHEMA)
     migrate_sqlite_schema(con)
