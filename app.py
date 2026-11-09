@@ -23,6 +23,7 @@ from security import allow_chat_request
 from agent_registry import get_agent_prompt, get_allowed_tools
 from file_storage import get_storage_client
 from data_directory import resolve_data_dir
+from chat_titles import make_chat_title
 
 client = AsyncOpenAI(
     api_key=os.environ["API_KEY"],
@@ -452,9 +453,9 @@ async def run_tool(name, args, allowed_tools):
         if name == "get_time":
             return get_time(value)
         if name == "remember":
-            return remember(value)
+            return await asyncio.to_thread(remember, value)
         if name == "forget":
-            return forget(value)
+            return await asyncio.to_thread(forget, value)
     except Exception as e:
         print("tool execution failed:", type(e).__name__, flush=True)
         return "The tool could not complete this request."
@@ -462,7 +463,7 @@ async def run_tool(name, args, allowed_tools):
 
 # ---------- helpers ----------
 
-def build_system_prompt():
+async def build_system_prompt():
     profile = cl.user_session.get("chat_profile") or "General"
     home_zone = os.environ.get("USER_TZ", "Asia/Karachi")
     parts = [
@@ -474,7 +475,7 @@ def build_system_prompt():
         "time zone name (for Canada use America/Toronto unless a city is named); "
         "never guess time zones or daylight saving.",
     ]
-    mem = get_memories()
+    mem = await asyncio.to_thread(get_memories)
     if mem:
         parts.append("Things the user asked you to remember:\n" + "\n".join(f"- {m}" for m in mem))
     return "\n\n".join(p for p in parts if p)
@@ -538,19 +539,10 @@ async def persist_current_thread_owner():
         return None
 
 
-async def auto_title(first_text, model, persisted_user_id=None):
+async def auto_title(first_text, persisted_user_id=None):
+    """Name the first chat locally; do not spend a second model request on metadata."""
     try:
-        r, route = await model_router.create_completion(
-            model=model,
-            messages=[{
-                "role": "user",
-                "content": "Write a title of 2 to 5 words for a chat that starts with "
-                           "this message. Reply with only the title, no quotes.\n\n"
-                           + first_text[:500],
-            }],
-            max_tokens=40,
-        )
-        title = (r.choices[0].message.content or "").strip().strip('"').strip("'")[:50]
+        title = make_chat_title(first_text)
         dl = cl_get_data_layer()
         if title and dl and persisted_user_id:
             await dl.update_thread(
@@ -559,7 +551,7 @@ async def auto_title(first_text, model, persisted_user_id=None):
                 user_id=persisted_user_id,
             )
     except Exception as e:
-        print("auto-title generation failed:", type(e).__name__, flush=True)
+        print("auto-title update failed:", type(e).__name__, flush=True)
 
 
 async def generate(work, settings, reply, allowed_tools):
@@ -672,7 +664,7 @@ async def handle_command(cmd, argument=""):
                               display="inline")],
         ).send()
     elif cmd == "/memory":
-        mem = get_memories()
+        mem = await asyncio.to_thread(get_memories)
         if mem:
             body = "Your saved memories (use /forget-memory NUMBER to remove one):\n"
             body += "\n".join(f"{i}. {fact}" for i, fact in enumerate(mem, 1))
@@ -680,10 +672,10 @@ async def handle_command(cmd, argument=""):
             body = "I have nothing saved yet."
         await cl.Message(content=body).send()
     elif cmd == "/forget-memory":
-        result = forget_memory_by_number(argument)
+        result = await asyncio.to_thread(forget_memory_by_number, argument)
         await cl.Message(content=result).send()
     elif cmd == "/clear-memory":
-        set_memories([])
+        await asyncio.to_thread(set_memories, [])
         await cl.Message(content="All saved memories for this browser identity have been cleared.").send()
 
 
@@ -691,7 +683,7 @@ async def handle_command(cmd, argument=""):
 @cl.on_message
 async def main(message: cl.Message):
     try:
-        if not allow_chat_request(user_key()):
+        if not await asyncio.to_thread(allow_chat_request, user_key()):
             await cl.Message(
                 content="You've reached the message limit. Please wait a minute and try again."
             ).send()
@@ -741,7 +733,8 @@ async def main(message: cl.Message):
     if image_parts and not user_text.strip():
         user_text = "Describe this image."
 
-    work = [{"role": "system", "content": build_system_prompt()}] + list(history)
+    system_prompt = await build_system_prompt()
+    work = [{"role": "system", "content": system_prompt}] + list(history)
     if image_parts:
         work.append({"role": "user",
                      "content": [{"type": "text", "text": user_text}] + image_parts})
@@ -770,4 +763,4 @@ async def main(message: cl.Message):
     if not cl.user_session.get("titled"):
         cl.user_session.set("titled", True)
         persisted_user_id = await persist_current_thread_owner()
-        await auto_title(user_text, settings["model"], persisted_user_id)
+        await auto_title(user_text, persisted_user_id)
