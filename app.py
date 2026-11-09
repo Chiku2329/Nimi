@@ -22,6 +22,7 @@ from guest_auth import guest_identifier_from_cookie
 from security import allow_chat_request
 from agent_registry import get_agent_prompt, get_allowed_tools
 from file_storage import get_storage_client
+from data_directory import resolve_data_dir
 
 client = AsyncOpenAI(
     api_key=os.environ["API_KEY"],
@@ -41,8 +42,6 @@ MAX_MESSAGE_CHARS = 20000
 # Gemini remains the primary provider. OpenRouter is optional and is hard-pinned
 # to its free-only router; no paid OpenRouter model ID is accepted by this app.
 model_router = ModelRouter(client, openrouter_api_key=os.environ.get("OPENROUTER_API_KEY"))
-from data_directory import resolve_data_dir
-
 DATA_DIR = resolve_data_dir()
 os.environ.setdefault("NIMI_STORAGE_DIR", os.path.join(DATA_DIR, "elements"))
 print("Data folder:", DATA_DIR, flush=True)
