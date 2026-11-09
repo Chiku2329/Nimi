@@ -25,7 +25,7 @@ from agent_registry import get_agent_prompt, get_allowed_tools
 client = AsyncOpenAI(
     api_key=os.environ["API_KEY"],
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-    timeout=60.0,
+    timeout=15.0,
     max_retries=0,
 )
 
