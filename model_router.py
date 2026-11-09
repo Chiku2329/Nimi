@@ -7,6 +7,7 @@ is attempted only if a provider fails before it emits its first chunk.
 from __future__ import annotations
 
 import asyncio
+import time
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
 
@@ -104,21 +105,35 @@ class ModelRouter:
         last_error: Exception | None = None
         for target in self.targets(preferred):
             emitted = False
+            started_at = time.perf_counter()
             try:
                 stream = await target.client.chat.completions.create(
                     **params, model=target.model
                 )
                 async for chunk in stream:
+                    if not emitted:
+                        elapsed = time.perf_counter() - started_at
+                        print(
+                            f"model first chunk: {target.name} after {elapsed:.2f}s",
+                            flush=True,
+                        )
                     emitted = True
                     yield chunk, target.name
                 return
             except Exception as error:
                 last_error = error
+                elapsed = time.perf_counter() - started_at
                 if emitted or not is_retryable_provider_error(error):
+                    print(
+                        f"model stream failed: {target.name} after {elapsed:.2f}s "
+                        f"({type(error).__name__})",
+                        flush=True,
+                    )
                     raise
                 print(
-                    "stream provider unavailable before first chunk; trying next free route:",
-                    target.name, type(error).__name__, flush=True
+                    f"model provider unavailable before first chunk: {target.name} "
+                    f"after {elapsed:.2f}s ({type(error).__name__}); trying next free route",
+                    flush=True,
                 )
         if last_error is not None:
             raise last_error
