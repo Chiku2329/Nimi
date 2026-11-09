@@ -22,11 +22,8 @@ class DataDirectoryTests(unittest.TestCase):
     def test_default_directory_is_still_supported_for_local_development(self):
         with tempfile.TemporaryDirectory() as directory:
             with patch.dict(os.environ, {}, clear=True):
-                with patch("data_directory.Path", wraps=Path) as path_type:
-                    path_type.return_value = Path(directory)
-                    # The normal default is the current working directory; this
-                    # test only verifies the resolver works without DATA_DIR.
-                    self.assertEqual(resolve_data_dir(), str(Path(".").resolve()))
+                # The default is the current working directory.
+                self.assertEqual(resolve_data_dir(), str(Path(".").resolve()))
 
 
 if __name__ == "__main__":
