@@ -142,10 +142,10 @@ def _extract_docx(name, mime, data):
         for table_index, table in enumerate(document.tables, 1):
             parts.append(f"Table {table_index}:")
             for row in table.rows:
-                parts.append(" | ".join(cell.text.replace("\\n", " ").strip() for cell in row.cells))
+                parts.append(" | ".join(cell.text.replace("\n", " ").strip() for cell in row.cells))
                 if sum(map(len, parts)) >= MAX_FILE_CHARS:
                     break
-        return _trimmed_result(name, mime, data, "\\n".join(parts))
+        return _trimmed_result(name, mime, data, "\n".join(parts))
     except UploadRejected:
         raise
     except Exception:
@@ -178,7 +178,7 @@ def _extract_xlsx(name, mime, data):
                     break
         finally:
             workbook.close()
-        return _trimmed_result(name, mime, data, "\\n".join(parts))
+        return _trimmed_result(name, mime, data, "\n".join(parts))
     except UploadRejected:
         raise
     except Exception:
@@ -206,7 +206,7 @@ def _extract_pptx(name, mime, data):
                     break
             if sum(map(len, parts)) >= MAX_FILE_CHARS:
                 break
-        return _trimmed_result(name, mime, data, "\\n".join(parts))
+        return _trimmed_result(name, mime, data, "\n".join(parts))
     except UploadRejected:
         raise
     except Exception:
@@ -247,7 +247,7 @@ def _read_upload(element):
                 remaining = MAX_FILE_CHARS - char_count
                 extracted.append(part[:remaining])
                 char_count += min(len(part), remaining)
-            return _trimmed_result(name, mime, data, "\\n".join(extracted))
+            return _trimmed_result(name, mime, data, "\n".join(extracted))
         except UploadRejected:
             raise
         except Exception:
@@ -269,7 +269,7 @@ def _read_upload(element):
         data = _read_bytes(element, name)
         if len(data) > MAX_TEXT_BYTES:
             raise UploadRejected("Text and code files are limited to 2 MB.")
-        if b"\\x00" in data:
+        if b"\x00" in data:
             raise UploadRejected("A text file contains invalid binary data.")
         try:
             text = data.decode("utf-8-sig", errors="strict")
