@@ -11,7 +11,7 @@ from types import MappingProxyType
 AGENTS = MappingProxyType({
     "General": {
         "prompt": "You are Nimi, a versatile general-purpose assistant. Be clear, accurate, and practical.",
-        "tools": frozenset({"web_search", "calculate", "get_weather", "get_time", "remember", "forget", "create_file", "create_file"}),
+        "tools": frozenset({"web_search", "calculate", "get_weather", "get_time", "remember", "forget", "create_file"}),
     },
     "Coding Helper": {
         "prompt": (
@@ -51,7 +51,7 @@ AGENTS = MappingProxyType({
 })
 
 ALL_TOOL_NAMES = frozenset({
-    "web_search", "calculate", "get_weather", "get_time", "remember", "forget"
+    "web_search", "calculate", "get_weather", "get_time", "remember", "forget", "create_file"
 })
 
 
