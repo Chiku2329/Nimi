@@ -108,12 +108,12 @@ class UploadValidationTests(unittest.TestCase):
             validate_upload_batch([element])
 
     def test_rejects_binary_disguised_as_text(self):
-        element = self.make_file("file.txt", "text/plain", b"hello\\x00world")
+        element = self.make_file("file.txt", "text/plain", b"hello\x00world")
         with self.assertRaises(UploadRejected):
             validate_upload_batch([element])
 
     def test_rejects_unsupported_executable(self):
-        element = self.make_file("program.exe", "application/octet-stream", b"MZ\\x00")
+        element = self.make_file("program.exe", "application/octet-stream", b"MZ\x00")
         with self.assertRaises(UploadRejected):
             validate_upload_batch([element])
 
