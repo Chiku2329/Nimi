@@ -5,6 +5,6 @@
   "display_override": ["standalone", "minimal-ui"], "orientation": "any",
   "theme_color": "#080b1b", "background_color": "#080b1b",
   "icons": [
-    {"src": "/public/nimi-infinity.svg?v=4", "type": "image/svg+xml", "sizes": "any", "purpose": "any"}
+    {"src": "/public/nimi-infinity.svg?v=5", "type": "image/svg+xml", "sizes": "any", "purpose": "any"}
   ]
 }
