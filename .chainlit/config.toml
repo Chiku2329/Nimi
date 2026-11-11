@@ -61,12 +61,12 @@ allowed_urls = []
 [UI]
 name = "Nimi"
 description = "Nimi - One AI. Infinite Possibilities."
-logo_file_url = "/public/nimi-logo.svg"
-custom_meta_image_url = "/public/logo_dark.png"
+logo_file_url = "/public/nimi-logo.svg?v=4"
+custom_meta_image_url = "/public/nimi-logo.svg?v=4"
 confirm_new_chat = true
 cot = "full"
 alert_style = "classic"
-default_avatar_file_url = "/public/icon-192.png"
+default_avatar_file_url = "/public/nimi-infinity.svg?v=4"
 
 [meta]
 generated_by = "2.12.0"
