@@ -67,6 +67,38 @@ confirm_new_chat = true
 cot = "full"
 alert_style = "classic"
 default_avatar_file_url = "/public/nimi-infinity.svg?v=4"
+custom_css = "/public/nimi-theme.css?v=1"
+layout = "wide"
+
+[UI.theme]
+default = "dark"
+font_family = "Inter, ui-sans-serif, system-ui, sans-serif"
+
+[UI.theme.light]
+background = "#F7F6FC"
+paper = "#FFFFFF"
+
+[UI.theme.light.primary]
+main = "#8057EF"
+dark = "#6840D5"
+light = "#B69BFF"
+
+[UI.theme.light.text]
+primary = "#201B2D"
+secondary = "#716B80"
+
+[UI.theme.dark]
+background = "#090D1C"
+paper = "#12182B"
+
+[UI.theme.dark.primary]
+main = "#A78BFA"
+dark = "#8057EF"
+light = "#C4B5FD"
+
+[UI.theme.dark.text]
+primary = "#F5F2FF"
+secondary = "#B8B3CA"
 
 [meta]
 generated_by = "2.12.0"
