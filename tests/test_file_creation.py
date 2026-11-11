@@ -21,13 +21,13 @@ class FileCreationTests(unittest.TestCase):
         self.assertIn("A generated report", reader.pages[0].extract_text())
 
     def test_creates_excel_from_csv_rows(self):
-        _, _, data = create_file("xlsx", "data", "Name,Score\\nAda,95")
+        _, _, data = create_file("xlsx", "data", "Name,Score\nAda,95")
         workbook = load_workbook(__import__("io").BytesIO(data), read_only=True)
         self.assertEqual(workbook.active["A2"].value, "Ada")
         workbook.close()
 
     def test_creates_powerpoint(self):
-        _, _, data = create_file("pptx", "slides", "Welcome\\nFirst slide\\n---\\nSummary\\nSecond slide")
+        _, _, data = create_file("pptx", "slides", "Welcome\nFirst slide\n---\nSummary\nSecond slide")
         presentation = Presentation(__import__("io").BytesIO(data))
         self.assertEqual(len(presentation.slides), 2)
 
