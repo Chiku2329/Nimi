@@ -23,7 +23,27 @@ reaction_on_message_received = false
 
 [features.spontaneous_file_upload]
 enabled = true
-accept = ["application/pdf", "text/plain", "text/markdown", "text/csv", "image/png", "image/jpeg", "image/webp"]
+accept = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "text/*",
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+  "text/tab-separated-values",
+  "application/json",
+  "application/ld+json",
+  "application/xml",
+  "text/xml",
+  "application/javascript",
+  "application/x-yaml",
+  "application/yaml",
+  "image/png",
+  "image/jpeg",
+  "image/webp"
+]
 max_files = 3
 max_size_mb = 5
 

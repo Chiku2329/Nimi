@@ -18,6 +18,7 @@ from chainlit.types import ThreadDict
 from openai import AsyncOpenAI
 from model_router import ModelRouter
 from uploads import UploadRejected, validate_upload_batch
+from file_creation import FileCreationRejected, create_file
 from guest_auth import guest_identifier_from_cookie
 from security import allow_chat_request
 from agent_registry import get_agent_prompt, get_allowed_tools
@@ -421,6 +422,12 @@ TOOLS = [
        {"fact": {"type": "string"}}, ["fact"]),
     fn("forget", "Delete saved memories containing a keyword.",
        {"keyword": {"type": "string"}}, ["keyword"]),
+    fn("create_file", "Create a downloadable file when the user asks for a document, spreadsheet, presentation, PDF, or text file. For XLSX, provide CSV-formatted rows. For PPTX, separate slides with a line containing ---. For JSON, provide valid JSON.",
+       {
+           "file_format": {"type": "string", "enum": ["docx", "pdf", "xlsx", "pptx", "csv", "txt", "md", "json", "html"]},
+           "filename": {"type": "string", "description": "Suggested output filename, without requiring an extension."},
+           "content": {"type": "string", "description": "Complete content to place in the file. For XLSX use CSV rows; for PPTX separate slides with ---."}
+       }, ["file_format", "filename", "content"]),
 ]
 
 
@@ -437,6 +444,7 @@ async def run_tool(name, args, allowed_tools):
             "get_time": ("timezone_name", 100),
             "remember": ("fact", 500),
             "forget": ("keyword", 100),
+            "create_file": ("content", 30000),
         }
         if name not in limits:
             return "Unknown tool."
@@ -456,6 +464,20 @@ async def run_tool(name, args, allowed_tools):
             return await asyncio.to_thread(remember, value)
         if name == "forget":
             return await asyncio.to_thread(forget, value)
+        if name == "create_file":
+            file_format = args.get("file_format")
+            filename = args.get("filename")
+            if not isinstance(file_format, str) or not isinstance(filename, str) or len(filename) > 120:
+                return "Invalid file creation request."
+            safe_name, mime, data = await asyncio.to_thread(create_file, file_format, filename, value)
+            pending = cl.user_session.get("generated_files") or []
+            if len(pending) >= 3:
+                return "A maximum of three generated files can be attached in one response."
+            pending.append({"name": safe_name, "mime": mime, "data": data})
+            cl.user_session.set("generated_files", pending)
+            return f"Created {safe_name} ({len(data)} bytes). The file will be attached to the response."
+    except FileCreationRejected as e:
+        return str(e)
     except Exception as e:
         print("tool execution failed:", type(e).__name__, flush=True)
         return "The tool could not complete this request."
@@ -741,6 +763,7 @@ async def main(message: cl.Message):
     else:
         work.append({"role": "user", "content": user_text})
 
+    cl.user_session.set("generated_files", [])
     reply = cl.Message(content="")
     try:
         await generate(work, settings, reply, allowed_tools)
@@ -752,6 +775,17 @@ async def main(message: cl.Message):
     if not reply.content:
         reply.content = "I didn't get a response. Please try again."
     await reply.send()
+    generated = cl.user_session.get("generated_files") or []
+    if generated:
+        elements = [
+            cl.File(name=item["name"], content=item["data"], display="inline")
+            for item in generated
+        ]
+        await cl.Message(
+            content="Your file" + ("s are" if len(elements) > 1 else " is") + " ready:",
+            elements=elements,
+        ).send()
+    cl.user_session.set("generated_files", [])
 
     stored = user_text
     if image_names:
