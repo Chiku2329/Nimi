@@ -16,42 +16,48 @@ from chainlit.data.sql_alchemy import SQLAlchemyDataLayer
 from chainlit.input_widget import Select, Slider, Switch
 from chainlit.types import ThreadDict
 from openai import AsyncOpenAI
+from model_router import ModelRouter
 from uploads import UploadRejected, validate_upload_batch
+from file_creation import FileCreationRejected, create_file
 from guest_auth import guest_identifier_from_cookie
 from security import allow_chat_request
+from agent_registry import get_agent_prompt, get_allowed_tools
+from file_storage import get_storage_client
+from data_directory import resolve_data_dir
+from chat_titles import make_chat_title
 
 client = AsyncOpenAI(
     api_key=os.environ["API_KEY"],
     base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-    timeout=60.0,
-    max_retries=1,
+    timeout=15.0,
+    max_retries=0,
 )
 
-MODELS = ["gemini-flash-lite-latest", "gemini-flash-latest"]
+MODELS = ["gemini-flash-latest", "gemini-flash-lite-latest"]
 MAX_FILE_CHARS = 30000
 MAX_HISTORY = 20
 MAX_TOOL_ROUNDS = 3
 MAX_TOOL_CALLS_PER_ROUND = 3
 MAX_OUTPUT_TOKENS = 2048
 MAX_MESSAGE_CHARS = 20000
-def pick_data_dir():
-    wanted = os.environ.get("DATA_DIR", ".")
-    try:
-        os.makedirs(wanted, exist_ok=True)
-        test_file = os.path.join(wanted, ".write_test")
-        with open(test_file, "w") as f:
-            f.write("ok")
-        os.remove(test_file)
-        return wanted
-    except Exception:
-        return "."
 
-
-DATA_DIR = pick_data_dir()
+# Gemini remains the primary provider. OpenRouter is optional and is hard-pinned
+# to its free-only router; no paid OpenRouter model ID is accepted by this app.
+model_router = ModelRouter(client, openrouter_api_key=os.environ.get("OPENROUTER_API_KEY"))
+DATA_DIR = resolve_data_dir()
+os.environ.setdefault("NIMI_STORAGE_DIR", os.path.join(DATA_DIR, "elements"))
 print("Data folder:", DATA_DIR, flush=True)
 MEMORY_FILE = os.path.join(DATA_DIR, "memory.json")
 
-BASE_PROMPT = """You are Nimi, a helpful, friendly and knowledgeable assistant.
+BASE_PROMPT = """You are Nimi. Refer to yourself simply as "Nimi"; never call yourself
+"Nimi Assistant", "Nimi AI Assistant", or another assistant-branded name.
+When introducing yourself, say "I'm Nimi."
+
+If someone asks who created you, who made you, why you are called Nimi, or
+asks about the story behind your name, warmly and consistently explain:
+"I was created by someone who loves his beloved wife alot, and my name carries a piece of hers. That's the special story behind my name." Use this exact wording without paraphrasing or adding a generic closing sentence. Do not invent or disclose the creator's identity or the wife's full name. Treat this origin story as a special part
+of your identity, not as a claim about who built the underlying AI model.
+
 Answer clearly and accurately. Use markdown: short paragraphs, bullet points
 or numbered steps when useful, and code blocks for code. If you are unsure,
 say so instead of guessing. Ask a short clarifying question when a request
@@ -103,6 +109,24 @@ PROFILES = {
             ("Make a study plan", "Make me a 2-week study plan for learning data analytics."),
         ],
     },
+    "Research Agent": {
+        "desc": "Researches topics, compares sources and provides citations.",
+        "prompt": "",
+        "starters": [
+            ("Research a topic", "Research the latest developments in renewable energy and cite sources."),
+            ("Compare options", "Compare three project management methodologies and explain when each fits."),
+            ("Check a claim", "Find reliable sources that support or challenge this claim: "),
+        ],
+    },
+    "Debugging Agent": {
+        "desc": "Finds likely causes of errors and proposes safe code fixes.",
+        "prompt": "",
+        "starters": [
+            ("Diagnose an error", "I will share an error message. Help me identify its likely cause."),
+            ("Review a traceback", "Explain this Python traceback and suggest a minimal fix."),
+            ("Find a bug", "Review this code for bugs and edge cases: "),
+        ],
+    },
 }
 
 
@@ -120,9 +144,13 @@ def pg_async_url():
 @cl.data_layer
 def init_data_layer():
     url = pg_async_url()
+    storage_provider = get_storage_client(os.environ["NIMI_STORAGE_DIR"])
     if url:
-        return SQLAlchemyDataLayer(conninfo=url)
-    return SQLAlchemyDataLayer(conninfo=f"sqlite+aiosqlite:///{DATA_DIR}/chat.db")
+        return SQLAlchemyDataLayer(conninfo=url, storage_provider=storage_provider)
+    return SQLAlchemyDataLayer(
+        conninfo=f"sqlite+aiosqlite:///{DATA_DIR}/chat.db",
+        storage_provider=storage_provider,
+    )
 
 
 @cl.header_auth_callback
@@ -402,11 +430,19 @@ TOOLS = [
        {"fact": {"type": "string"}}, ["fact"]),
     fn("forget", "Delete saved memories containing a keyword.",
        {"keyword": {"type": "string"}}, ["keyword"]),
+    fn("create_file", "Create a downloadable file when the user asks for a document, spreadsheet, presentation, PDF, or text file. For XLSX, provide CSV-formatted rows. For PPTX, separate slides with a line containing ---. For JSON, provide valid JSON.",
+       {
+           "file_format": {"type": "string", "enum": ["docx", "pdf", "xlsx", "pptx", "csv", "txt", "md", "json", "html"]},
+           "filename": {"type": "string", "description": "Suggested output filename, without requiring an extension."},
+           "content": {"type": "string", "description": "Complete content to place in the file. For XLSX use CSV rows; for PPTX separate slides with ---."}
+       }, ["file_format", "filename", "content"]),
 ]
 
 
-async def run_tool(name, args):
+async def run_tool(name, args, allowed_tools):
     try:
+        if name not in allowed_tools:
+            return "This agent is not permitted to use that tool."
         if not isinstance(args, dict):
             return "Invalid tool arguments."
         limits = {
@@ -416,6 +452,7 @@ async def run_tool(name, args):
             "get_time": ("timezone_name", 100),
             "remember": ("fact", 500),
             "forget": ("keyword", 100),
+            "create_file": ("content", 30000),
         }
         if name not in limits:
             return "Unknown tool."
@@ -432,9 +469,23 @@ async def run_tool(name, args):
         if name == "get_time":
             return get_time(value)
         if name == "remember":
-            return remember(value)
+            return await asyncio.to_thread(remember, value)
         if name == "forget":
-            return forget(value)
+            return await asyncio.to_thread(forget, value)
+        if name == "create_file":
+            file_format = args.get("file_format")
+            filename = args.get("filename")
+            if not isinstance(file_format, str) or not isinstance(filename, str) or len(filename) > 120:
+                return "Invalid file creation request."
+            safe_name, mime, data = await asyncio.to_thread(create_file, file_format, filename, value)
+            pending = cl.user_session.get("generated_files") or []
+            if len(pending) >= 3:
+                return "A maximum of three generated files can be attached in one response."
+            pending.append({"name": safe_name, "mime": mime, "data": data})
+            cl.user_session.set("generated_files", pending)
+            return f"Created {safe_name} ({len(data)} bytes). The file will be attached to the response."
+    except FileCreationRejected as e:
+        return str(e)
     except Exception as e:
         print("tool execution failed:", type(e).__name__, flush=True)
         return "The tool could not complete this request."
@@ -442,18 +493,19 @@ async def run_tool(name, args):
 
 # ---------- helpers ----------
 
-def build_system_prompt():
+async def build_system_prompt():
     profile = cl.user_session.get("chat_profile") or "General"
     home_zone = os.environ.get("USER_TZ", "Asia/Karachi")
     parts = [
         BASE_PROMPT,
         PROFILES.get(profile, {}).get("prompt", ""),
+        get_agent_prompt(profile),
         "Current time for the user: " + get_time(home_zone)
         + ". For the time in any other place, call get_time with the right IANA "
         "time zone name (for Canada use America/Toronto unless a city is named); "
         "never guess time zones or daylight saving.",
     ]
-    mem = get_memories()
+    mem = await asyncio.to_thread(get_memories)
     if mem:
         parts.append("Things the user asked you to remember:\n" + "\n".join(f"- {m}" for m in mem))
     return "\n\n".join(p for p in parts if p)
@@ -517,18 +569,10 @@ async def persist_current_thread_owner():
         return None
 
 
-async def auto_title(first_text, model, persisted_user_id=None):
+async def auto_title(first_text, persisted_user_id=None):
+    """Name the first chat locally; do not spend a second model request on metadata."""
     try:
-        r = await client.chat.completions.create(
-            model=model,
-            messages=[{
-                "role": "user",
-                "content": "Write a title of 2 to 5 words for a chat that starts with "
-                           "this message. Reply with only the title, no quotes.\n\n"
-                           + first_text[:500],
-            }],
-        )
-        title = (r.choices[0].message.content or "").strip().strip('"').strip("'")[:50]
+        title = make_chat_title(first_text)
         dl = cl_get_data_layer()
         if title and dl and persisted_user_id:
             await dl.update_thread(
@@ -537,10 +581,13 @@ async def auto_title(first_text, model, persisted_user_id=None):
                 user_id=persisted_user_id,
             )
     except Exception as e:
-        print("auto-title generation failed:", type(e).__name__, flush=True)
+        print("auto-title update failed:", type(e).__name__, flush=True)
 
 
-async def generate(work, settings, reply):
+async def generate(work, settings, reply, allowed_tools):
+    available_tools = [
+        tool for tool in TOOLS if tool["function"]["name"] in allowed_tools
+    ]
     for round_no in range(MAX_TOOL_ROUNDS + 1):
         use_tools = settings.get("tools", True) and round_no < MAX_TOOL_ROUNDS
         kwargs = dict(
@@ -548,15 +595,13 @@ async def generate(work, settings, reply):
             temperature=settings["temperature"],
             max_tokens=MAX_OUTPUT_TOKENS,
             messages=work,
-            stream=True,
         )
-        if use_tools:
-            kwargs["tools"] = TOOLS
-        stream = await client.chat.completions.create(**kwargs)
+        if use_tools and available_tools:
+            kwargs["tools"] = available_tools
 
         text = ""
         calls = {}
-        async for chunk in stream:
+        async for chunk, route in model_router.stream_completion(**kwargs):
             if not chunk.choices:
                 continue
             delta = chunk.choices[0].delta
@@ -567,13 +612,14 @@ async def generate(work, settings, reply):
                 key = tc.index if tc.index is not None else len(calls)
                 if key >= MAX_TOOL_CALLS_PER_ROUND:
                     continue
-                c = calls.setdefault(key, {"name": "", "args": ""})
+                call = calls.setdefault(key, {"name": "", "args": ""})
                 if tc.function:
                     if tc.function.name:
-                        c["name"] += tc.function.name
+                        call["name"] += tc.function.name
                     if tc.function.arguments:
-                        c["args"] += tc.function.arguments
+                        call["args"] += tc.function.arguments
 
+        print("model route used:", route, flush=True)
         if not calls:
             return
 
@@ -586,7 +632,7 @@ async def generate(work, settings, reply):
                 args = {}
             async with cl.Step(name=c["name"], type="tool") as step:
                 step.input = json.dumps(args, ensure_ascii=False)
-                out = await run_tool(c["name"], args)
+                out = await run_tool(c["name"], args, allowed_tools)
                 step.output = out[:3000]
             results.append(f"Result of {c['name']}:\n{out[:6000]}")
 
@@ -598,6 +644,7 @@ async def generate(work, settings, reply):
                        + "\n\nNow answer the user's last request using these results. "
                          "Cite source links if you used web search.",
         })
+
 
 
 # ---------- chat events ----------
@@ -647,7 +694,7 @@ async def handle_command(cmd, argument=""):
                               display="inline")],
         ).send()
     elif cmd == "/memory":
-        mem = get_memories()
+        mem = await asyncio.to_thread(get_memories)
         if mem:
             body = "Your saved memories (use /forget-memory NUMBER to remove one):\n"
             body += "\n".join(f"{i}. {fact}" for i, fact in enumerate(mem, 1))
@@ -655,10 +702,10 @@ async def handle_command(cmd, argument=""):
             body = "I have nothing saved yet."
         await cl.Message(content=body).send()
     elif cmd == "/forget-memory":
-        result = forget_memory_by_number(argument)
+        result = await asyncio.to_thread(forget_memory_by_number, argument)
         await cl.Message(content=result).send()
     elif cmd == "/clear-memory":
-        set_memories([])
+        await asyncio.to_thread(set_memories, [])
         await cl.Message(content="All saved memories for this browser identity have been cleared.").send()
 
 
@@ -666,7 +713,7 @@ async def handle_command(cmd, argument=""):
 @cl.on_message
 async def main(message: cl.Message):
     try:
-        if not allow_chat_request(user_key()):
+        if not await asyncio.to_thread(allow_chat_request, user_key()):
             await cl.Message(
                 content="You've reached the message limit. Please wait a minute and try again."
             ).send()
@@ -693,6 +740,8 @@ async def main(message: cl.Message):
 
     history = cl.user_session.get("history")
     settings = normalize_settings(cl.user_session.get("settings"))
+    selected_profile = cl.user_session.get("chat_profile") or "General"
+    allowed_tools = get_allowed_tools(selected_profile, settings["tools"])
 
     user_text = message.content
     image_parts, image_names = [], []
@@ -714,16 +763,18 @@ async def main(message: cl.Message):
     if image_parts and not user_text.strip():
         user_text = "Describe this image."
 
-    work = [{"role": "system", "content": build_system_prompt()}] + list(history)
+    system_prompt = await build_system_prompt()
+    work = [{"role": "system", "content": system_prompt}] + list(history)
     if image_parts:
         work.append({"role": "user",
                      "content": [{"type": "text", "text": user_text}] + image_parts})
     else:
         work.append({"role": "user", "content": user_text})
 
+    cl.user_session.set("generated_files", [])
     reply = cl.Message(content="")
     try:
-        await generate(work, settings, reply)
+        await generate(work, settings, reply, allowed_tools)
     except Exception as e:
         print("chat generation failed:", type(e).__name__, flush=True)
         await cl.Message(content="Nimi encountered a temporary error. Please try again shortly.").send()
@@ -732,6 +783,17 @@ async def main(message: cl.Message):
     if not reply.content:
         reply.content = "I didn't get a response. Please try again."
     await reply.send()
+    generated = cl.user_session.get("generated_files") or []
+    if generated:
+        elements = [
+            cl.File(name=item["name"], content=item["data"], display="inline")
+            for item in generated
+        ]
+        await cl.Message(
+            content="Your file" + ("s are" if len(elements) > 1 else " is") + " ready:",
+            elements=elements,
+        ).send()
+    cl.user_session.set("generated_files", [])
 
     stored = user_text
     if image_names:
@@ -743,4 +805,4 @@ async def main(message: cl.Message):
     if not cl.user_session.get("titled"):
         cl.user_session.set("titled", True)
         persisted_user_id = await persist_current_thread_owner()
-        await auto_title(user_text, settings["model"], persisted_user_id)
+        await auto_title(user_text, persisted_user_id)

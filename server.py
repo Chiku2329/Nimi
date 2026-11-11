@@ -1,13 +1,17 @@
 """FastAPI entry point that silently provisions private guest sessions."""
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, RedirectResponse
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from chainlit.server import _authenticate_user
 from chainlit.user import User
 from chainlit.utils import mount_chainlit
 
 from chainlit_hardening import apply_chainlit_session_guard
+from chainlit_compat import apply_chat_profile_config_compat
 from response_security import build_security_headers
+from file_storage import attachment_media_type, get_storage_client
 
 from guest_auth import (
     COOKIE_MAX_AGE,
@@ -19,8 +23,34 @@ from guest_auth import (
 # CVE-2026-86099 mitigation: validate client-supplied session ids before
 # Chainlit can use them as filesystem directory names.
 apply_chainlit_session_guard()
+# Nimi profiles do not use Chainlit config_overrides; avoid Chainlit 2.12.0's
+# run_until_complete call against the async profile callback on a live loop.
+apply_chat_profile_config_compat()
 
 app = FastAPI()
+
+
+
+@app.get("/private-storage/{object_key:path}", include_in_schema=False)
+async def serve_private_attachment(object_key: str, expires: int, signature: str):
+    """Serve an attachment only through a short-lived, signed storage URL."""
+    try:
+        path = get_storage_client().resolve_signed_file(object_key, expires, signature)
+    except (ValueError, FileNotFoundError):
+        # Do not reveal whether an object key exists to an unauthenticated caller.
+        raise HTTPException(status_code=404, detail="Attachment not found.") from None
+
+    return FileResponse(
+        path,
+        media_type=attachment_media_type(path),
+        filename=path.name,
+        content_disposition_type="inline",
+        headers={
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "Referrer-Policy": "no-referrer",
+        },
+    )
 
 
 @app.middleware("http")
@@ -35,6 +65,30 @@ async def send_login_page_to_guest_auth(request: Request, call_next):
     # Add defensive browser headers to normal responses and redirects alike.
     response.headers.update(build_security_headers(is_https=request.url.scheme == "https"))
     return response
+
+
+@app.get("/favicon", include_in_schema=False)
+@app.get("/favicon.ico", include_in_schema=False)
+@app.get("/favicon.svg", include_in_schema=False)
+async def nimi_favicon():
+    # Chainlit does not expose a favicon setting in config.toml. Serve Nimi's
+    # own infinity mark at the conventional browser favicon URLs instead.
+    icon_path = Path(__file__).resolve().parent / "public" / "nimi-infinity.svg"
+    return FileResponse(
+        icon_path,
+        media_type="image/svg+xml",
+        headers={"Cache-Control": "no-cache, max-age=0"},
+    )
+
+
+@app.get("/favicon.png", include_in_schema=False)
+async def nimi_favicon_png():
+    icon_path = Path(__file__).resolve().parent / "public" / "icon-192.png"
+    return FileResponse(
+        icon_path,
+        media_type="image/png",
+        headers={"Cache-Control": "no-cache, max-age=0"},
+    )
 
 
 @app.get("/guest-auth")
