@@ -1,8 +1,8 @@
 (function () {
   "use strict";
-  var icon = "/public/nimi-infinity.svg?v=4";
+  var icon = "/public/nimi-infinity.svg?v=5";
   var touchIcon = icon;
-  var wordmark = "/public/nimi-logo.svg?v=4";
+  var wordmark = "/public/nimi-logo.svg?v=5";
 
   function recoverStuckGuestAuth() {
     if (window.location.pathname !== "/login/callback") return;
@@ -51,7 +51,7 @@
 
   var manifestLink = document.querySelector('link[rel="manifest"]') || document.createElement("link");
   manifestLink.rel = "manifest";
-  manifestLink.href = "/public/manifest.json?v=4";
+  manifestLink.href = "/public/manifest.json?v=5";
   if (!manifestLink.isConnected) document.head.appendChild(manifestLink);
   [["theme-color", "#080b1b"], ["apple-mobile-web-app-capable", "yes"],
    ["apple-mobile-web-app-title", "Nimi"], ["mobile-web-app-capable", "yes"]].forEach(function (p) {
