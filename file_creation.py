@@ -13,7 +13,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
-from xml.sax.saxutils import escape
+from html import escape
 
 MAX_CREATE_CHARS = 30_000
 MAX_CREATED_BYTES = 5 * 1024 * 1024
