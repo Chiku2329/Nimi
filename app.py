@@ -25,6 +25,7 @@ from agent_registry import get_agent_prompt, get_allowed_tools
 from file_storage import get_storage_client
 from data_directory import resolve_data_dir
 from chat_titles import make_chat_title
+from untrusted_content import UNTRUSTED_CONTENT_INSTRUCTIONS, format_untrusted_attachment
 
 client = AsyncOpenAI(
     api_key=os.environ["API_KEY"],
@@ -498,6 +499,7 @@ async def build_system_prompt():
     home_zone = os.environ.get("USER_TZ", "Asia/Karachi")
     parts = [
         BASE_PROMPT,
+        UNTRUSTED_CONTENT_INSTRUCTIONS,
         PROFILES.get(profile, {}).get("prompt", ""),
         get_agent_prompt(profile),
         "Current time for the user: " + get_time(home_zone)
@@ -758,7 +760,7 @@ async def main(message: cl.Message):
             )
             image_names.append(upload["name"])
         else:
-            user_text += f"\n\n[Attached file: {upload['name']}]\n{upload['text']}"
+            user_text += format_untrusted_attachment(upload["name"], upload["text"])
 
     if image_parts and not user_text.strip():
         user_text = "Describe this image."
