@@ -89,6 +89,12 @@ def create_file(file_format, filename, content):
                 rows = [[text]]
             for row in rows[:1000]:
                 sheet.append([cell[:2000] for cell in row[:50]])
+            # Keep untrusted text as text: openpyxl otherwise treats leading "="
+            # values as formulas when Excel opens the generated workbook.
+            for row in sheet.iter_rows():
+                for cell in row:
+                    if isinstance(cell.value, str) and cell.value.startswith("="):
+                        cell.data_type = "s"
             for column in sheet.columns:
                 letter = column[0].column_letter
                 max_width = max((len(str(cell.value or "")) for cell in column), default=10)
@@ -114,9 +120,26 @@ def create_file(file_format, filename, content):
             presentation.save(output)
 
         elif fmt == "csv":
-            # Keep user/model-provided CSV structure; reject malformed quoting.
-            list(csv.reader(io.StringIO(text), strict=True))
-            output.write(text.encode("utf-8-sig"))
+            # CSV files may be opened directly in spreadsheet software. Prefix
+            # formula-like text with an apostrophe to prevent formula injection,
+            # while preserving ordinary signed numeric values.
+            rows = list(csv.reader(io.StringIO(text), strict=True))
+            safe_rows = []
+            numeric = re.compile(r"[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?")
+            for row in rows:
+                safe_row = []
+                for value in row:
+                    candidate = value.lstrip(" \\t\\r\\n")
+                    if (
+                        candidate.startswith(("=", "+", "-", "@"))
+                        and not numeric.fullmatch(candidate)
+                    ):
+                        value = "'" + value
+                    safe_row.append(value)
+                safe_rows.append(safe_row)
+            csv_output = io.StringIO(newline="")
+            csv.writer(csv_output, lineterminator="\\n").writerows(safe_rows)
+            output.write(csv_output.getvalue().encode("utf-8-sig"))
             mime = "text/csv; charset=utf-8"
 
         elif fmt == "json":
