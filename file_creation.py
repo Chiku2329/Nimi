@@ -125,11 +125,11 @@ def create_file(file_format, filename, content):
             # while preserving ordinary signed numeric values.
             rows = list(csv.reader(io.StringIO(text), strict=True))
             safe_rows = []
-            numeric = re.compile(r"[+-]?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?")
+            numeric = re.compile(r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?")
             for row in rows:
                 safe_row = []
                 for value in row:
-                    candidate = value.lstrip(" \\t\\r\\n")
+                    candidate = value.lstrip(" \t\r\n")
                     if (
                         candidate.startswith(("=", "+", "-", "@"))
                         and not numeric.fullmatch(candidate)
@@ -138,7 +138,7 @@ def create_file(file_format, filename, content):
                     safe_row.append(value)
                 safe_rows.append(safe_row)
             csv_output = io.StringIO(newline="")
-            csv.writer(csv_output, lineterminator="\\n").writerows(safe_rows)
+            csv.writer(csv_output, lineterminator="\n").writerows(safe_rows)
             output.write(csv_output.getvalue().encode("utf-8-sig"))
             mime = "text/csv; charset=utf-8"
 
