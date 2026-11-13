@@ -30,7 +30,8 @@ class FileCreationTests(unittest.TestCase):
 
     def test_excel_keeps_formula_like_untrusted_values_as_text(self):
         formula = '=HYPERLINK("https://example.invalid","open")'
-        _, _, data = create_file("xlsx", "safe", "Name\n" + formula)
+        csv_formula = '"=HYPERLINK(""https://example.invalid"",""open"")"'
+        _, _, data = create_file("xlsx", "safe", "Name\n" + csv_formula)
         workbook = load_workbook(io.BytesIO(data), data_only=False)
         cell = workbook.active["A2"]
         self.assertEqual(cell.value, formula)
