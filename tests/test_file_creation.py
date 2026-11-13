@@ -30,7 +30,7 @@ class FileCreationTests(unittest.TestCase):
 
     def test_excel_keeps_formula_like_untrusted_values_as_text(self):
         formula = '=HYPERLINK("https://example.invalid","open")'
-        _, _, data = create_file("xlsx", "safe", "Name\\n" + formula)
+        _, _, data = create_file("xlsx", "safe", "Name\n" + formula)
         workbook = load_workbook(io.BytesIO(data), data_only=False)
         cell = workbook.active["A2"]
         self.assertEqual(cell.value, formula)
@@ -38,7 +38,7 @@ class FileCreationTests(unittest.TestCase):
         workbook.close()
 
     def test_csv_neutralizes_formula_like_cells_but_preserves_numbers(self):
-        source = 'Name,Value\\n=HYPERLINK("https://example.invalid","open"),-12\\n@SUM(A1:A2),+12'
+        source = 'Name,Value\n"=HYPERLINK(""https://example.invalid"",""open"")",-12\n@SUM(A1:A2),+12'
         _, _, data = create_file("csv", "safe", source)
         rows = list(csv.reader(io.StringIO(data.decode("utf-8-sig"))))
         self.assertEqual(rows[1][0], '\'=HYPERLINK("https://example.invalid","open")')
