@@ -70,7 +70,7 @@ name = "Nimi"
 description = "Nimi - One AI. Infinite Possibilities."
 logo_file_url = "/public/nimi-logo.svg?v=5"
 custom_meta_image_url = "/public/nimi-logo.svg?v=5"
-custom_js = "/public/pwa.js?v=5"
+custom_js = "/public/pwa.js?v=6"
 confirm_new_chat = true
 cot = "full"
 alert_style = "classic"
