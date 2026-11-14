@@ -21,10 +21,9 @@
   }
   recoverStuckGuestAuth();
 
-  // Chainlit 2.12.0 uses React Dropzone for its composer upload control.
-  // Bridge native file-picker selections through the same drop handler used
-  // by drag-and-drop. This avoids relying on the frontend's file-input
-  // change callback when the browser closes the picker without uploading.
+  // Chainlit 2.12.0 uses React Dropzone for file uploads. Bridge native
+  // file-picker selections through the composer-level drop handler, which
+  // is also used by drag-and-drop.
   function installFilePickerBridge() {
     if (document.documentElement.dataset.nimiPickerBridge === "installed") return;
     document.documentElement.dataset.nimiPickerBridge = "installed";
@@ -33,7 +32,9 @@
       var input = event.target;
       if (!input || input.id !== "upload-button-input" || !input.files || !input.files.length) return;
 
-      var root = input.parentElement && input.parentElement.querySelector("button");
+      // The composer-level dropzone owns the actual upload callback. The
+      // paperclip button dropzone has noDrag enabled and cannot receive this.
+      var root = document.querySelector(".dropzone");
       if (!root) return;
 
       var transfer;
