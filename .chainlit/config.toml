@@ -23,27 +23,34 @@ reaction_on_message_received = false
 
 [features.spontaneous_file_upload]
 enabled = true
-accept = [
-  "application/pdf",
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  "text/*",
-  "text/plain",
-  "text/markdown",
-  "text/csv",
-  "text/tab-separated-values",
-  "application/json",
-  "application/ld+json",
-  "application/xml",
-  "text/xml",
-  "application/javascript",
-  "application/x-yaml",
-  "application/yaml",
-  "image/png",
-  "image/jpeg",
-  "image/webp"
-]
+# MIME-to-extension mappings avoid unsupported wildcard values in the browser's
+# file input accept attribute while still allowing common source and document files.
+accept = {
+  "application/pdf" = [".pdf"],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document" = [".docx"],
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" = [".xlsx"],
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation" = [".pptx"],
+  "text/plain" = [".txt", ".log", ".py", ".java", ".kt", ".c", ".h", ".cpp", ".cs", ".go", ".rs", ".php", ".rb", ".sh", ".sql", ".toml", ".ini", ".cfg", ".properties", ".gradle", ".swift", ".r"],
+  "text/markdown" = [".md"],
+  "text/csv" = [".csv"],
+  "text/tab-separated-values" = [".tsv"],
+  "application/json" = [".json", ".jsonl", ".ipynb"],
+  "application/ld+json" = [".jsonld"],
+  "application/xml" = [".xml"],
+  "text/xml" = [".xml"],
+  "text/html" = [".html"],
+  "text/css" = [".css"],
+  "application/javascript" = [".js", ".jsx"],
+  "text/javascript" = [".js", ".jsx"],
+  "application/typescript" = [".ts", ".tsx"],
+  "application/x-yaml" = [".yaml", ".yml"],
+  "application/yaml" = [".yaml", ".yml"],
+  "application/graphql" = [".graphql"],
+  "application/octet-stream" = [".txt", ".md", ".csv", ".tsv", ".json", ".jsonl", ".xml", ".yaml", ".yml", ".html", ".css", ".js", ".ts", ".tsx", ".jsx", ".py", ".java", ".kt", ".c", ".h", ".cpp", ".cs", ".go", ".rs", ".php", ".rb", ".sh", ".sql", ".log", ".toml", ".ini", ".cfg", ".properties", ".gradle", ".swift", ".r", ".ipynb", ".vue", ".svelte", ".graphql", ".diff", ".patch"],
+  "image/png" = [".png"],
+  "image/jpeg" = [".jpg", ".jpeg"],
+  "image/webp" = [".webp"]
+}
 max_files = 3
 max_size_mb = 5
 
