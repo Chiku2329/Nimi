@@ -1,5 +1,6 @@
 """FastAPI entry point that silently provisions private guest sessions."""
 
+import asyncio
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
@@ -12,6 +13,7 @@ from chainlit_hardening import apply_chainlit_session_guard
 from chainlit_compat import apply_chat_profile_config_compat
 from response_security import build_security_headers
 from file_storage import attachment_media_type, get_storage_client
+from health import check_database_ready
 
 from guest_auth import (
     COOKIE_MAX_AGE,
@@ -29,6 +31,22 @@ apply_chat_profile_config_compat()
 
 app = FastAPI()
 
+
+@app.get("/healthz", include_in_schema=False)
+async def liveness():
+    """Report that the Nimi web process is running; no private data is inspected."""
+    return {"status": "ok", "service": "nimi"}
+
+
+@app.get("/readyz", include_in_schema=False)
+async def readiness():
+    """Report database connectivity without modifying chats, memories, or files."""
+    try:
+        await asyncio.to_thread(check_database_ready)
+    except Exception as error:
+        print("readiness check failed:", type(error).__name__, flush=True)
+        raise HTTPException(status_code=503, detail="Service temporarily unavailable.") from None
+    return {"status": "ready", "service": "nimi"}
 
 
 @app.get("/private-storage/{object_key:path}", include_in_schema=False)
