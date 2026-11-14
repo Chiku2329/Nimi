@@ -30,6 +30,7 @@ class ReadinessTests(unittest.TestCase):
         cursor = MagicMock()
         cursor.fetchone.return_value = (1,)
         connection = MagicMock()
+        connection.__enter__.return_value = connection
         connection.cursor.return_value.__enter__.return_value = cursor
         with patch("psycopg2.connect", return_value=connection) as connect:
             self.assertTrue(
