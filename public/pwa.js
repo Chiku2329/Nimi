@@ -32,9 +32,10 @@
       var input = event.target;
       if (!input || input.id !== "upload-button-input" || !input.files || !input.files.length) return;
 
-      // The composer-level dropzone owns the actual upload callback. The
-      // paperclip button dropzone has noDrag enabled and cannot receive this.
-      var root = document.querySelector(".dropzone");
+      // Chainlit's composer-level dropzone owns the upload callback. Its
+      // hidden input is a direct child of the root element.
+      var dropInput = document.getElementById("#upload-drop-input");
+      var root = dropInput && dropInput.parentElement;
       if (!root) return;
 
       var transfer;
