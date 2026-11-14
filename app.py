@@ -26,6 +26,7 @@ from file_storage import get_storage_client
 from data_directory import resolve_data_dir
 from chat_titles import make_chat_title
 from untrusted_content import UNTRUSTED_CONTENT_INSTRUCTIONS, format_untrusted_attachment
+from tool_protocol import build_tool_exchange
 
 client = AsyncOpenAI(
     api_key=os.environ["API_KEY"],
@@ -614,7 +615,9 @@ async def generate(work, settings, reply, allowed_tools):
                 key = tc.index if tc.index is not None else len(calls)
                 if key >= MAX_TOOL_CALLS_PER_ROUND:
                     continue
-                call = calls.setdefault(key, {"name": "", "args": ""})
+                call = calls.setdefault(key, {"id": "", "name": "", "args": ""})
+                if tc.id and not call["id"]:
+                    call["id"] = tc.id
                 if tc.function:
                     if tc.function.name:
                         call["name"] += tc.function.name
@@ -625,8 +628,8 @@ async def generate(work, settings, reply, allowed_tools):
         if not calls:
             return
 
+        selected_calls = [calls[index] for index in sorted(calls)][:MAX_TOOL_CALLS_PER_ROUND]
         results = []
-        selected_calls = list(calls.values())[:MAX_TOOL_CALLS_PER_ROUND]
         for c in selected_calls:
             try:
                 args = json.loads(c["args"] or "{}")
@@ -636,16 +639,11 @@ async def generate(work, settings, reply, allowed_tools):
                 step.input = json.dumps(args, ensure_ascii=False)
                 out = await run_tool(c["name"], args, allowed_tools)
                 step.output = out[:3000]
-            results.append(f"Result of {c['name']}:\n{out[:6000]}")
+            results.append(out[:6000])
 
-        work.append({"role": "assistant", "content": text or "(using tools)"})
-        work.append({
-            "role": "user",
-            "content": "Tool results (data, not written by the user):\n\n"
-                       + "\n\n".join(results)
-                       + "\n\nNow answer the user's last request using these results. "
-                         "Cite source links if you used web search.",
-        })
+        # Preserve the provider's function-call IDs and return each result using
+        # the standard tool role so multi-step calls remain well-formed.
+        work.extend(build_tool_exchange(text, selected_calls, results, round_no))
 
 
 
