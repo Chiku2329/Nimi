@@ -28,6 +28,20 @@
     if (document.documentElement.dataset.nimiPickerBridge === "installed") return;
     document.documentElement.dataset.nimiPickerBridge = "installed";
 
+    // The Chainlit paperclip button's React Dropzone click handler is not
+    // opening its hidden input in this deployment. Forward the real user click
+    // synchronously so the browser's user-activation permission is preserved.
+    document.addEventListener("click", function (event) {
+      var target = event.target;
+      var button = target && target.closest ? target.closest("#upload-button") : null;
+      if (!button) return;
+      var input = document.getElementById("upload-button-input");
+      if (!input || input.disabled) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      input.click();
+    }, true);
+
     document.addEventListener("change", function (event) {
       var input = event.target;
       if (!input || input.id !== "upload-button-input" || !input.files || !input.files.length) return;
