@@ -21,6 +21,51 @@
   }
   recoverStuckGuestAuth();
 
+  // Chainlit 2.12.0 uses React Dropzone for file uploads. Bridge native
+  // file-picker selections through the composer-level drop handler, which
+  // is also used by drag-and-drop.
+  function installFilePickerBridge() {
+    if (document.documentElement.dataset.nimiPickerBridge === "installed") return;
+    document.documentElement.dataset.nimiPickerBridge = "installed";
+
+    document.addEventListener("change", function (event) {
+      var input = event.target;
+      if (!input || input.id !== "upload-button-input" || !input.files || !input.files.length) return;
+
+      // Chainlit's composer-level dropzone owns the upload callback. Its
+      // hidden input is a direct child of the root element.
+      var dropInput = document.getElementById("#upload-drop-input");
+      var root = dropInput && dropInput.parentElement;
+      if (!root) return;
+
+      var transfer;
+      var dropEvent;
+      try {
+        transfer = new DataTransfer();
+        Array.prototype.forEach.call(input.files, function (file) {
+          transfer.items.add(file);
+        });
+        dropEvent = new DragEvent("drop", {
+          bubbles: true,
+          cancelable: true,
+          dataTransfer: transfer
+        });
+      } catch (_) {
+        // Keep Chainlit's native handler intact if this browser cannot create
+        // a synthetic DataTransfer/DragEvent.
+        return;
+      }
+
+      // Stop React Dropzone's input-change path only after the fallback event
+      // has been constructed successfully; the drop handler owns validation
+      // and upload for both picker and drag-and-drop selections.
+      event.stopImmediatePropagation();
+      root.dispatchEvent(dropEvent);
+      input.value = "";
+    }, true);
+  }
+  installFilePickerBridge();
+
   function upsertLink(rel, href, type, sizes) {
     var links = document.querySelectorAll('link[rel="' + rel + '"]');
     if (!links.length) {
