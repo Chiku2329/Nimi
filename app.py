@@ -737,7 +737,15 @@ async def main(message: cl.Message):
     cmd = command_parts[0].lower() if command_parts else ""
     argument = command_parts[1].strip() if len(command_parts) > 1 else ""
     if cmd in ("/export", "/memory", "/forget-memory", "/clear-memory"):
-        await handle_command(cmd, argument)
+        try:
+            await handle_command(cmd, argument)
+        except Exception as error:
+            # Keep private command arguments, memory contents, and database details
+            # out of logs and user-facing errors.
+            print("chat command failed:", type(error).__name__, flush=True)
+            await cl.Message(
+                content="Nimi couldn't complete that command right now. Please try again shortly."
+            ).send()
         return
 
     history = cl.user_session.get("history")
@@ -765,7 +773,17 @@ async def main(message: cl.Message):
     if image_parts and not user_text.strip():
         user_text = "Describe this image."
 
-    system_prompt = await build_system_prompt()
+    try:
+        system_prompt = await build_system_prompt()
+    except Exception as error:
+        # Memory/database failures can happen before model generation begins.
+        # Report a safe message without exposing private context or raw exceptions.
+        print("chat context preparation failed:", type(error).__name__, flush=True)
+        await cl.Message(
+            content="Nimi couldn't prepare your chat right now. Please try again shortly."
+        ).send()
+        return
+
     work = [{"role": "system", "content": system_prompt}] + list(history)
     if image_parts:
         work.append({"role": "user",
