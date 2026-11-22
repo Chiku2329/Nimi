@@ -60,7 +60,7 @@ A public anonymous app still needs abuse protection. If robust visitor-level rat
 ### Phase 2 — Specialist agents
 
 - Add Research, Coding, and Debugging first.
-- Add Security and Testing after the first agents are tested.
+- Add Security Reviewer and Testing Assistant after the first agents are tested.
 - Make clear to visitors that coding assistance generates and reviews code but does not execute it.
 
 ### Phase 3 — Optional execution sandbox and model routing
@@ -68,6 +68,25 @@ A public anonymous app still needs abuse protection. If robust visitor-level rat
 - Consider code execution only in a separate, disposable sandbox with strict CPU, memory, time, filesystem, network, and output limits.
 - Consider a model router such as OmniRoute only after the basic agents are stable. Any paid provider must remain disabled unless explicitly enabled by the owner.
 - Do not expose an administration dashboard or router management API publicly.
+
+## Implementation notes
+
+The first agent-foundation implementation adds a server-owned registry for
+General, Coding Helper, Writing Helper, Study Tutor, Research Agent, and
+Debugging Agent. Each profile receives only its permitted tool definitions,
+and the server independently rejects tool calls outside that profile's
+allowlist. The existing Gemini-compatible client and model choices remain
+unchanged.
+
+The first release intentionally has no shell, arbitrary code execution,
+filesystem editing, deployment, or agent self-modification tools. Coding and
+debugging agents can generate recommendations and patches from visitor-provided
+material, but cannot run them. Security Reviewer and Testing Assistant remain
+planned for the next rollout after these agents are validated.
+
+The browser favicon is served from Nimi's existing infinity SVG asset through
+the conventional `/favicon.ico` and `/favicon.svg` routes. This is separate
+from Chainlit's assistant logo setting.
 
 ## Development workflow
 

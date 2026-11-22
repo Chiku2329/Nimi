@@ -2,9 +2,9 @@ name: security-checks
 
 on:
   push:
-    branches: [main, nimi-agent-foundation, "security/**", "release/**"]
+    branches: [main, nimi-agent-foundation, "feature/**", "security/**", "release/**"]
   pull_request:
-    branches: [main, nimi-agent-foundation]
+    branches: [main, nimi-agent-foundation, "feature/**"]
   schedule:
     - cron: "23 3 * * 1"
   workflow_dispatch:

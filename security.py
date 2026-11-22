@@ -4,6 +4,8 @@ import os
 import sqlite3
 import time
 
+from data_directory import resolve_data_dir
+
 REQUESTS_PER_MINUTE = 10
 GLOBAL_REQUESTS_PER_MINUTE = 120
 _GLOBAL_KEY = "__nimi_global_request_bucket__"
@@ -81,7 +83,7 @@ def allow_chat_request(user_key: str, now: float | None = None) -> bool:
                         (timestamp - 3600,),
                     )
     else:
-        data_dir = os.environ.get("DATA_DIR", ".")
+        data_dir = resolve_data_dir()
         db_path = os.path.join(data_dir, "chat.db")
         with sqlite3.connect(db_path, timeout=10) as con:
             guest_count = _next_count(con, user_key, window_start, sqlite_mode=True)

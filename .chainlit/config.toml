@@ -5,7 +5,7 @@ user_session_timeout = 1296000
 cache = false
 persist_user_env = false
 mask_user_env = false
-allow_origins = ["https://nimi.blitz.cloud", "https://nimi.prod.page"]
+allow_origins = ["https://nimi.blitz.cloud", "https://nimi.prod.page", "https://nimistaging.nimi.prod.page"]
 
 [features]
 unsafe_allow_html = false
@@ -23,7 +23,34 @@ reaction_on_message_received = false
 
 [features.spontaneous_file_upload]
 enabled = true
-accept = ["application/pdf", "text/plain", "text/markdown", "text/csv", "image/png", "image/jpeg", "image/webp"]
+# MIME-to-extension mappings avoid unsupported wildcard values in the browser's
+# file input accept attribute while still allowing common source and document files.
+accept = {
+  "application/pdf" = [".pdf"],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document" = [".docx"],
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" = [".xlsx"],
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation" = [".pptx"],
+  "text/plain" = [".txt", ".log", ".py", ".java", ".kt", ".c", ".h", ".cpp", ".cs", ".go", ".rs", ".php", ".rb", ".sh", ".sql", ".toml", ".ini", ".cfg", ".properties", ".gradle", ".swift", ".r"],
+  "text/markdown" = [".md"],
+  "text/csv" = [".csv"],
+  "text/tab-separated-values" = [".tsv"],
+  "application/json" = [".json", ".jsonl", ".ipynb"],
+  "application/ld+json" = [".jsonld"],
+  "application/xml" = [".xml"],
+  "text/xml" = [".xml"],
+  "text/html" = [".html"],
+  "text/css" = [".css"],
+  "application/javascript" = [".js", ".jsx"],
+  "text/javascript" = [".js", ".jsx"],
+  "application/typescript" = [".ts", ".tsx"],
+  "application/x-yaml" = [".yaml", ".yml"],
+  "application/yaml" = [".yaml", ".yml"],
+  "application/graphql" = [".graphql"],
+  "application/octet-stream" = [".txt", ".md", ".csv", ".tsv", ".json", ".jsonl", ".xml", ".yaml", ".yml", ".html", ".css", ".js", ".ts", ".tsx", ".jsx", ".py", ".java", ".kt", ".c", ".h", ".cpp", ".cs", ".go", ".rs", ".php", ".rb", ".sh", ".sql", ".log", ".toml", ".ini", ".cfg", ".properties", ".gradle", ".swift", ".r", ".ipynb", ".vue", ".svelte", ".graphql", ".diff", ".patch"],
+  "image/png" = [".png"],
+  "image/jpeg" = [".jpg", ".jpeg"],
+  "image/webp" = [".webp"]
+}
 max_files = 3
 max_size_mb = 5
 
@@ -41,12 +68,45 @@ allowed_urls = []
 [UI]
 name = "Nimi"
 description = "Nimi - One AI. Infinite Possibilities."
-logo_file_url = "/public/nimi-logo.svg"
-custom_meta_image_url = "/public/logo_dark.png"
+logo_file_url = "/public/nimi-logo.svg?v=5"
+custom_meta_image_url = "/public/nimi-logo.svg?v=5"
+custom_js = "/public/pwa.js?v=6"
 confirm_new_chat = true
 cot = "full"
 alert_style = "classic"
-default_avatar_file_url = "/public/icon-192.png"
+default_avatar_file_url = "/public/nimi-infinity.svg?v=5"
+custom_css = "/public/nimi-theme.css?v=1"
+layout = "wide"
+
+[UI.theme]
+default = "dark"
+font_family = "Inter, ui-sans-serif, system-ui, sans-serif"
+
+[UI.theme.light]
+background = "#F7F6FC"
+paper = "#FFFFFF"
+
+[UI.theme.light.primary]
+main = "#8057EF"
+dark = "#6840D5"
+light = "#B69BFF"
+
+[UI.theme.light.text]
+primary = "#201B2D"
+secondary = "#716B80"
+
+[UI.theme.dark]
+background = "#090D1C"
+paper = "#12182B"
+
+[UI.theme.dark.primary]
+main = "#A78BFA"
+dark = "#8057EF"
+light = "#C4B5FD"
+
+[UI.theme.dark.text]
+primary = "#F5F2FF"
+secondary = "#B8B3CA"
 
 [meta]
 generated_by = "2.12.0"
