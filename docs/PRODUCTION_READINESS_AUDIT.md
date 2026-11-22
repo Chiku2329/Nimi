@@ -26,6 +26,13 @@ The new `data_directory.resolve_data_dir()` probes the configured directory and 
 - The container runs as an unprivileged user and keeps application code read-only while allowing the data and required runtime folders to be writable.
 - GitHub Actions runs unit tests, JavaScript syntax validation, pip-audit, and Bandit.
 
+### Added: read-only operational health endpoints
+
+- `GET /healthz` reports process liveness without reading private data or contacting dependencies.
+- `GET /readyz` checks only whether the configured chat database answers `SELECT 1`; it returns a generic 503 when the database is unavailable.
+- The PostgreSQL probe uses a short connection timeout. The SQLite probe opens the existing database in read-only mode. Neither probe reads user records, changes schemas, or writes to `/data`.
+- These endpoints are diagnostics, not a substitute for backup monitoring or a full application smoke test.
+
 ## Operational checks still required before production promotion
 
 These depend on the hosting account and cannot be verified from repository code alone:
