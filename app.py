@@ -27,6 +27,7 @@ from data_directory import resolve_data_dir
 from chat_titles import make_chat_title
 from untrusted_content import UNTRUSTED_CONTENT_INSTRUCTIONS, format_untrusted_attachment
 from tool_protocol import build_tool_exchange
+from research_sources import normalize_search_results
 
 client = AsyncOpenAI(
     api_key=os.environ["API_KEY"],
@@ -331,13 +332,12 @@ def _search(query):
 
 
 async def web_search(query: str):
-    results = await asyncio.to_thread(_search, query)
-    if not results:
-        return "No results found."
-    return "\n\n".join(
-        f"{r.get('title', '')}\n{r.get('href', '')}\n{r.get('body', '')}" for r in results
-    )
-
+    try:
+        results = await asyncio.to_thread(_search, query)
+    except Exception as exc:
+        print("web search failed:", type(exc).__name__, flush=True)
+        return normalize_search_results([])
+    return normalize_search_results(results)
 
 async def get_weather(city: str):
     async with httpx.AsyncClient(timeout=15) as http:
