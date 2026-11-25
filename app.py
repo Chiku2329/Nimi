@@ -494,6 +494,8 @@ async def build_system_prompt():
 def trim_history(history, max_messages=MAX_HISTORY, max_chars=MAX_HISTORY_CHARS):
     """Keep recent conversational context within message and character budgets."""
     recent = list(history[-max_messages:])
+    if recent and recent[0].get("role") == "assistant":
+        recent.pop(0)
     while len(recent) > 2 and sum(
         len(str(item.get("content", ""))) for item in recent
     ) > max_chars:
