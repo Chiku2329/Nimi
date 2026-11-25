@@ -16,6 +16,8 @@ from openai import AsyncOpenAI
 
 
 GEMINI_MODELS = ("gemini-flash-latest", "gemini-flash-lite-latest")
+ZAI_DEFAULT_MODEL = "glm-4.7-flash"
+ZAI_BASE_URL = "https://api.z.ai/api/paas/v4"
 OLLAMA_DEFAULT_MODEL = "deepseek-v4.1-flash"
 OLLAMA_BASE_URL = "https://ollama.com/v1"
 OPENROUTER_FREE_MODEL = "openrouter/free"
@@ -83,7 +85,7 @@ def is_retryable_provider_error(error: Exception) -> bool:
     """Only fail over for temporary capacity, network, or server errors."""
     status = getattr(error, "status_code", None)
     if status is not None:
-        return status in {408, 409, 425, 429, 500, 502, 503, 504}
+        return status in {402, 408, 409, 425, 429, 500, 502, 503, 504}
     return (
         isinstance(error, (asyncio.TimeoutError, TimeoutError, httpx.TransportError))
         or error.__class__.__name__ in {
@@ -100,6 +102,8 @@ class ModelRouter:
         gemini_client: Any,
         openrouter_api_key: str | None = None,
         openrouter_client: Any | None = None,
+        zai_api_key: str | None = None,
+        zai_client: Any | None = None,
         ollama_api_key: str | None = None,
         ollama_model: str = OLLAMA_DEFAULT_MODEL,
         ollama_client: Any | None = None,
@@ -117,9 +121,20 @@ class ModelRouter:
         self.first_chunk_timeout_seconds = {
             "gemini-flash-latest": 8.0,
             "gemini-flash-lite-latest": 10.0,
+            ZAI_DEFAULT_MODEL: 12.0,
             OLLAMA_DEFAULT_MODEL: 12.0,
             OPENROUTER_FREE_MODEL: 12.0,
         }
+        self.zai_client = zai_client
+        zai_key = (zai_api_key or "").strip()
+        if zai_key and self.zai_client is None:
+            self.zai_client = AsyncOpenAI(
+                api_key=zai_key,
+                base_url=ZAI_BASE_URL,
+                timeout=15.0,
+                max_retries=0,
+            )
+
         self.ollama_client = ollama_client
         ollama_key = (ollama_api_key or "").strip()
         if ollama_key and self.ollama_client is None:
@@ -154,6 +169,10 @@ class ModelRouter:
             for model in GEMINI_MODELS
             if not (cooling_down and model == GEMINI_MODELS[0])
         ]
+        if self.zai_client is not None:
+            targets.append(
+                ModelTarget("Z.AI (GLM-4.7-Flash)", self.zai_client, ZAI_DEFAULT_MODEL)
+            )
         if self.ollama_client is not None:
             targets.append(
                 ModelTarget("Ollama Cloud (DeepSeek V4.1 Flash)", self.ollama_client, self.ollama_model)

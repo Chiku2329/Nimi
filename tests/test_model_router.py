@@ -7,6 +7,7 @@ from model_router import (
     GEMINI_MODELS,
     OPENROUTER_FREE_MODEL,
     OLLAMA_DEFAULT_MODEL,
+    ZAI_DEFAULT_MODEL,
     ModelRouter,
     is_retryable_provider_error,
 )
@@ -47,6 +48,39 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
         ollama = self.make_client([object()])
         router = ModelRouter(gemini, ollama_client=ollama)
         self.assertEqual(router.targets("deepseek-v4.1-flash")[0].model, "deepseek-v4.1-flash")
+
+    async def test_manually_selected_zai_is_first(self):
+        gemini = self.make_client([object()])
+        zai = self.make_client([object()])
+        router = ModelRouter(gemini, zai_client=zai)
+        self.assertEqual(router.targets(ZAI_DEFAULT_MODEL)[0].model, ZAI_DEFAULT_MODEL)
+
+    async def test_zai_is_fallback_after_both_gemini_models(self):
+        response = object()
+        gemini = self.make_client([ProviderError(429), ProviderError(503)])
+        zai = self.make_client([response])
+        openrouter = self.make_client([object()])
+        router = ModelRouter(gemini, zai_client=zai, openrouter_client=openrouter)
+        result, route = await router.create_completion(messages=[])
+        self.assertIs(result, response)
+        self.assertEqual(route, "Z.AI (GLM-4.7-Flash)")
+        self.assertEqual(
+            zai.chat.completions.create.await_args.kwargs["model"],
+            ZAI_DEFAULT_MODEL,
+        )
+        self.assertEqual(openrouter.chat.completions.create.await_count, 0)
+
+    async def test_payment_required_provider_error_fails_over_to_next_free_route(self):
+        response = object()
+        gemini = self.make_client([ProviderError(429), ProviderError(503)])
+        ollama = self.make_client([ProviderError(402)])
+        openrouter = self.make_client([response])
+        router = ModelRouter(
+            gemini, ollama_client=ollama, openrouter_client=openrouter
+        )
+        result, route = await router.create_completion(messages=[])
+        self.assertIs(result, response)
+        self.assertEqual(route, "OpenRouter Free")
 
     async def test_manually_selected_openrouter_is_first(self):
         gemini = self.make_client([object()])
