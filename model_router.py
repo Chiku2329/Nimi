@@ -1,8 +1,7 @@
-"""Free-only model failover for Nimi.
+"""Model routing for Nimi with a fast Gemini Flash-Lite default.
 
-Gemini is the default. Ollama Cloud and OpenRouter Free are optional selectable
-providers and automatic fallbacks. Streaming responses are passed through live;
-failover is attempted only if a provider fails before its first chunk.
+Z.AI is an optional selectable route with a bounded timeout. Ollama Cloud remains
+manually selectable only; it is never used as an automatic fallback.
 """
 from __future__ import annotations
 
@@ -95,7 +94,7 @@ def is_retryable_provider_error(error: Exception) -> bool:
 
 
 class ModelRouter:
-    """Gemini-first router with optional Ollama Cloud and free OpenRouter fallbacks."""
+    """Fast-default router; Ollama Cloud is manual-only to avoid surprise billing."""
 
     def __init__(
         self,
@@ -121,7 +120,7 @@ class ModelRouter:
         self.first_chunk_timeout_seconds = {
             "gemini-flash-latest": 8.0,
             "gemini-flash-lite-latest": 10.0,
-            ZAI_DEFAULT_MODEL: 12.0,
+            ZAI_DEFAULT_MODEL: 6.0,
             OLLAMA_DEFAULT_MODEL: 12.0,
             OPENROUTER_FREE_MODEL: 12.0,
         }
@@ -131,7 +130,7 @@ class ModelRouter:
             self.zai_client = AsyncOpenAI(
                 api_key=zai_key,
                 base_url=ZAI_BASE_URL,
-                timeout=15.0,
+                timeout=7.0,
                 max_retries=0,
             )
 
@@ -173,7 +172,7 @@ class ModelRouter:
             targets.append(
                 ModelTarget("Z.AI (GLM-4.7-Flash)", self.zai_client, ZAI_DEFAULT_MODEL)
             )
-        if self.ollama_client is not None:
+        if self.ollama_client is not None and preferred_model == self.ollama_model:
             targets.append(
                 ModelTarget("Ollama Cloud (DeepSeek V4.1 Flash)", self.ollama_client, self.ollama_model)
             )
