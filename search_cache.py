@@ -18,15 +18,15 @@ CACHE_TTL_SECONDS = 90.0
 CACHE_MAX_ENTRIES = 128
 
 _FRESHNESS_RE = re.compile(
-    r"\\b(latest|today|now|currently|current|live|breaking|right now|"
-    r"this morning|tonight|price|prices|stock|exchange rate|forecast)\\b",
+    r"\b(latest|today|now|currently|current|live|breaking|right now|"
+    r"this morning|tonight|price|prices|stock|exchange rate|forecast)\b",
     re.IGNORECASE,
 )
 _PERSONAL_RE = re.compile(
-    r"\\b(my|mine|me|i|we|our|personal|private|account|address|"
-    r"medical|health|bank|password|passport)\\b|"
-    r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}|"
-    r"(?<!\\d)(?:\\+?\\d[ .()-]?){8,}(?!\\d)",
+    r"\b(my|mine|me|i|we|our|personal|private|account|address|"
+    r"medical|health|bank|password|passport)\b|"
+    r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}|"
+    r"(?<!\d)(?:\+?\d[ .()-]?){8,}(?!\d)",
     re.IGNORECASE,
 )
 
@@ -94,21 +94,24 @@ class WebSearchCache:
             lock = self._locks.setdefault(key, asyncio.Lock())
 
         async with lock:
-            async with self._guard:
-                cached = self._read(key)
-                if cached is not None:
-                    return cached
-
-            result = await search(query)
             try:
-                parsed = json.loads(result)
-                has_sources = isinstance(parsed, dict) and bool(parsed.get("sources"))
-            except (TypeError, ValueError):
-                has_sources = False
-
-            if has_sources:
                 async with self._guard:
-                    self._store(key, result)
-            return result
+                    cached = self._read(key)
+                    if cached is not None:
+                        return cached
 
-        # The per-query lock is removed by the lock-owner cleanup below.
+                result = await search(query)
+                try:
+                    parsed = json.loads(result)
+                    has_sources = isinstance(parsed, dict) and bool(parsed.get("sources"))
+                except (TypeError, ValueError):
+                    has_sources = False
+
+                if has_sources:
+                    async with self._guard:
+                        self._store(key, result)
+                return result
+            finally:
+                async with self._guard:
+                    if self._locks.get(key) is lock:
+                        self._locks.pop(key, None)
