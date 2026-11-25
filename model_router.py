@@ -115,6 +115,11 @@ class ModelRouter:
             if callable(getattr(gemini_client, "with_options", None))
             else gemini_client
         )
+        self.fallback_gemini_client = (
+            gemini_client.with_options(timeout=4.0)
+            if callable(getattr(gemini_client, "with_options", None))
+            else gemini_client
+        )
         self.primary_cooldown_seconds = 120.0
         self.primary_cooldown_until = 0.0
         self.first_chunk_timeout_seconds = {
@@ -162,7 +167,7 @@ class ModelRouter:
         targets = [
             ModelTarget(
                 f"Google Gemini ({model})",
-                self.primary_client if model == GEMINI_MODELS[0] else self.gemini_client,
+                self.primary_client if model == GEMINI_MODELS[0] else self.fallback_gemini_client,
                 model,
             )
             for model in GEMINI_MODELS
