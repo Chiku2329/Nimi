@@ -86,7 +86,7 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
         router = ModelRouter(gemini, openrouter_client=openrouter)
         self.assertEqual(router.targets(OPENROUTER_FREE_MODEL)[0].model, OPENROUTER_FREE_MODEL)
 
-    async def test_primary_gemini_flash_is_first_by_default(self):
+    async def test_flash_lite_is_first_by_default(self):
         gemini = self.make_client([RuntimeError("unused")])
         router = ModelRouter(gemini)
         self.assertEqual(router.targets()[0].model, "gemini-flash-lite-latest")
@@ -188,6 +188,18 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(is_retryable_provider_error(ProviderError(code)))
         for code in (400, 401, 403, 404):
             self.assertFalse(is_retryable_provider_error(ProviderError(code)))
+
+    async def test_fallback_gemini_cooldown_skips_unhealthy_flash(self):
+        gemini = self.make_client([ProviderError(503)])
+        router = ModelRouter(gemini)
+        with patch("model_router.time.monotonic", return_value=1000.0):
+            router._record_provider_failure(
+                router.targets()[1], ProviderError(503)
+            )
+            self.assertNotIn(
+                "gemini-flash-latest",
+                [target.model for target in router.targets()],
+            )
 
     async def test_primary_cooldown_skips_flash_until_cooldown_expires(self):
         gemini = self.make_client([ProviderError(503), object()])
