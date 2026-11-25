@@ -134,6 +134,32 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertNotIn("paid-model-name", model_ids)
 
+    def test_provider_error_details_include_status_and_safe_message(self):
+        from model_router import provider_error_details
+
+        error = ProviderError(401)
+        error.body = {"error": {"message": "Invalid API key"}}
+        details = provider_error_details(error)
+        self.assertIn("status=401", details)
+        self.assertIn("Invalid API key", details)
+
+    def test_provider_error_details_redact_credentials_and_bound_message(self):
+        from model_router import provider_error_details
+
+        error = ProviderError(403)
+        error.body = {
+            "error": {
+                "message": "Bearer abc.def.ghi api_key=secret-value "
+                "sk-1234567890abcdef " + ("x" * 400)
+            }
+        }
+        details = provider_error_details(error)
+        self.assertIn("status=403", details)
+        self.assertNotIn("abc.def.ghi", details)
+        self.assertNotIn("secret-value", details)
+        self.assertNotIn("sk-1234567890abcdef", details)
+        self.assertLess(len(details), 300)
+
     def test_only_transient_errors_are_retryable(self):
         for code in (408, 429, 500, 502, 503, 504):
             self.assertTrue(is_retryable_provider_error(ProviderError(code)))
