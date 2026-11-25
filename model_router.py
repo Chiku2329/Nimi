@@ -184,8 +184,12 @@ class ModelRouter:
                     if callable(close_stream):
                         try:
                             await close_stream()
-                        except Exception:
-                            pass
+                        except Exception as close_error:
+                            print(
+                                "model stream cleanup failed:",
+                                type(close_error).__name__,
+                                flush=True,
+                            )
                     raise
                 elapsed = time.perf_counter() - started_at
                 print(
