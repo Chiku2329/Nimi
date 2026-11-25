@@ -40,7 +40,7 @@ MODEL_OPTION_TO_ID = {
     "Gemini Flash-Lite Latest": "gemini-flash-lite-latest",
 }
 if os.environ.get("OLLAMA_API_KEY", "").strip():
-    MODEL_OPTION_TO_ID["Ollama Cloud — DeepSeek V4.1 Flash"] = "deepseek-v4.1-flash"
+    MODEL_OPTION_TO_ID["Ollama Cloud — DeepSeek V4.1 Flash (chat only)"] = "deepseek-v4.1-flash"
 if os.environ.get("OPENROUTER_API_KEY", "").strip():
     MODEL_OPTION_TO_ID["OpenRouter Free"] = "openrouter/free"
 MODELS = list(MODEL_OPTION_TO_ID.values())
@@ -566,11 +566,20 @@ async def auto_title(first_text, persisted_user_id=None):
 
 
 async def generate(work, settings, reply, allowed_tools):
+    # Ollama Cloud's direct API does not support Nimi's multi-turn tool-result
+    # replay protocol. Keep that selection chat-only; deterministic arithmetic
+    # is handled locally before this function is called.
+    supports_tool_replay = settings.get("model") != "deepseek-v4.1-flash"
     available_tools = [
-        tool for tool in TOOLS if tool["function"]["name"] in allowed_tools
+        tool for tool in TOOLS
+        if supports_tool_replay and tool["function"]["name"] in allowed_tools
     ]
     for round_no in range(MAX_TOOL_ROUNDS + 1):
-        use_tools = settings.get("tools", True) and round_no < MAX_TOOL_ROUNDS
+        use_tools = (
+            supports_tool_replay
+            and settings.get("tools", True)
+            and round_no < MAX_TOOL_ROUNDS
+        )
         kwargs = dict(
             model=settings["model"],
             temperature=settings["temperature"],
