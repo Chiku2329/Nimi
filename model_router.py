@@ -16,7 +16,7 @@ from openai import AsyncOpenAI
 
 
 GEMINI_MODELS = ("gemini-flash-latest", "gemini-flash-lite-latest")
-OLLAMA_DEFAULT_MODEL = "gemma4:31b"
+OLLAMA_DEFAULT_MODEL = "deepseek-v4.1-flash"
 OLLAMA_BASE_URL = "https://ollama.com/v1"
 OPENROUTER_FREE_MODEL = "openrouter/free"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
