@@ -25,9 +25,9 @@ def select_relevant_tools(user_text: str, allowed_tools) -> frozenset[str]:
         return frozenset()
 
     selected = set()
-    has_math_numbers = len(re.findall(r"(?<![A-Za-z])\\d+(?:\\.\\d+)?", text)) >= 2
-    has_math_operator = bool(re.search(r"[+*/×÷^%]|\\b(plus|minus|multiply|divid|times)\\b", text))
-    explicit_calculation = bool(re.search(r"\\b(calculate|compute|evaluate|solve)\\b", text))
+    has_math_numbers = len(re.findall(r"(?<![A-Za-z])\d+(?:\.\d+)?", text)) >= 2
+    has_math_operator = bool(re.search(r"[+*/×÷^%]|\b(plus|minus|multiply|divid|times)\b", text))
+    explicit_calculation = bool(re.search(r"\b(calculate|compute|evaluate|solve)\b", text))
     if extract_arithmetic_expression(text) or (
         has_math_numbers and (has_math_operator or explicit_calculation)
     ):
@@ -50,8 +50,8 @@ def select_relevant_tools(user_text: str, allowed_tools) -> frozenset[str]:
     if re.search(r"\b(forget|delete|remove).{0,40}\b(memory|memories|saved)\b", text):
         selected.add("forget")
     if re.search(
-        r"\b(create|make|generate|prepare|export)\b.{0,80}\b("
-        r"pdf|docx|word document|xlsx|spreadsheet|excel|pptx|powerpoint|"
+        r"\b(create|make|generate|prepare|export|write)\b.{0,80}\b("
+        r"pdf|docx|document|word document|xlsx|spreadsheet|excel|pptx|powerpoint|"
         r"csv|text file|markdown file|json file)\b",
         text,
     ):
