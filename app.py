@@ -41,6 +41,8 @@ MODEL_OPTION_TO_ID = {
     "Gemini Flash Latest": "gemini-flash-latest",
     "Gemini Flash-Lite Latest": "gemini-flash-lite-latest",
 }
+if os.environ.get("ZAI_API_KEY", "").strip():
+    MODEL_OPTION_TO_ID["Z.AI — GLM-4.7-Flash (free)"] = "glm-4.7-flash"
 if os.environ.get("OLLAMA_API_KEY", "").strip():
     MODEL_OPTION_TO_ID["Ollama Cloud — DeepSeek V4.1 Flash (chat only)"] = "deepseek-v4.1-flash"
 if os.environ.get("OPENROUTER_API_KEY", "").strip():
@@ -59,6 +61,7 @@ MAX_MESSAGE_CHARS = 20000
 model_router = ModelRouter(
     client,
     openrouter_api_key=os.environ.get("OPENROUTER_API_KEY"),
+    zai_api_key=os.environ.get("ZAI_API_KEY"),
     ollama_api_key=os.environ.get("OLLAMA_API_KEY"),
     ollama_model=os.environ.get("OLLAMA_MODEL", "deepseek-v4.1-flash"),
 )
