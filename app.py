@@ -46,7 +46,12 @@ MAX_MESSAGE_CHARS = 20000
 
 # Gemini remains the primary provider. OpenRouter is optional and is hard-pinned
 # to its free-only router; no paid OpenRouter model ID is accepted by this app.
-model_router = ModelRouter(client, openrouter_api_key=os.environ.get("OPENROUTER_API_KEY"))
+model_router = ModelRouter(
+    client,
+    openrouter_api_key=os.environ.get("OPENROUTER_API_KEY"),
+    ollama_api_key=os.environ.get("OLLAMA_API_KEY"),
+    ollama_model=os.environ.get("OLLAMA_MODEL", "gemma4:31b"),
+)
 DATA_DIR = resolve_data_dir()
 os.environ.setdefault("NIMI_STORAGE_DIR", os.path.join(DATA_DIR, "elements"))
 print("Data folder:", DATA_DIR, flush=True)
