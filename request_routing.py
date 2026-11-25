@@ -30,7 +30,7 @@ def select_relevant_tools(user_text: str, allowed_tools) -> frozenset[str]:
 
     if re.search(r"\b(weather|forecast|temperature|rain|snow|wind speed)\b", text):
         selected.add("get_weather")
-    if re.search(r"\b(time in|current time|local time|what time|time zone|timezone)\b", text):
+    if re.search(r"\b(time in|current time|local time|what time|tell me the time|time zone|timezone)\b", text):
         selected.add("get_time")
     if re.search(
         r"\b(search the web|web search|look up|find sources|cite sources|"
@@ -39,7 +39,7 @@ def select_relevant_tools(user_text: str, allowed_tools) -> frozenset[str]:
         text,
     ):
         selected.add("web_search")
-    if re.search(r"\b(remember this|remember that|save this|save to memory|"
+    if re.search(r"\b(remember this|remember that|remember i |remember my |save this|save to memory|"
                  r"remember for next time|don't forget)\b", text):
         selected.add("remember")
     if re.search(r"\b(forget|delete|remove).{0,40}\b(memory|memories|saved)\b", text):
