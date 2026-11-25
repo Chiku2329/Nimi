@@ -1,3 +1,4 @@
+import asyncio
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
@@ -14,6 +15,22 @@ from model_router import (
 class ProviderError(Exception):
     def __init__(self, status_code):
         self.status_code = status_code
+
+
+class DelayedStream:
+    def __init__(self, delay):
+        self.delay = delay
+        self.sent = False
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self.sent:
+            raise StopAsyncIteration
+        await asyncio.sleep(self.delay)
+        self.sent = True
+        return SimpleNamespace(choices=[])
 
 
 class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
@@ -132,6 +149,21 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(router.targets()[0].model, "gemini-flash-lite-latest")
         with patch("model_router.time.monotonic", return_value=1121.0):
             self.assertEqual(router.targets()[0].model, "gemini-flash-latest")
+
+    async def test_first_chunk_deadline_fails_over_from_stalled_gemini(self):
+        gemini = self.make_client([DelayedStream(0.05), DelayedStream(0.05)])
+        ollama = self.make_client([DelayedStream(0)])
+        router = ModelRouter(gemini, ollama_client=ollama)
+        router.first_chunk_timeout_seconds["gemini-flash-latest"] = 0.001
+        router.first_chunk_timeout_seconds["gemini-flash-lite-latest"] = 0.001
+        router.first_chunk_timeout_seconds[OLLAMA_DEFAULT_MODEL] = 0.1
+
+        received_routes = []
+        async for _, route in router.stream_completion(messages=[]):
+            received_routes.append(route)
+
+        self.assertEqual(received_routes, ["Ollama Cloud (DeepSeek V4.1 Flash)"])
+        self.assertEqual(ollama.chat.completions.create.await_count, 1)
 
     async def test_primary_timeout_is_shortened_when_client_supports_options(self):
         gemini = self.make_client([])
