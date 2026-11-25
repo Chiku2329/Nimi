@@ -20,13 +20,13 @@ def select_relevant_tools(user_text: str, allowed_tools) -> frozenset[str]:
         )
     if not isinstance(user_text, str):
         return frozenset()
-    text = user_text.strip().lower()
-    if not text or len(text) > 20000:
+    text = user_text.strip().lower()[:20000]
+    if not text:
         return frozenset()
 
     selected = set()
     has_math_numbers = len(re.findall(r"(?<![A-Za-z])\d+(?:\.\d+)?", text)) >= 2
-    has_math_operator = bool(re.search(r"[+*/×÷^%]|\b(plus|minus|multiply|divid|times)\b", text))
+    has_math_operator = bool(re.search(r"[+*/×÷^%]|\b(plus|minus|multiply|divided|divid|times)\b", text))
     explicit_calculation = bool(re.search(r"\b(calculate|compute|evaluate|solve)\b", text))
     if extract_arithmetic_expression(text) or (
         has_math_numbers and (has_math_operator or explicit_calculation)
