@@ -1,8 +1,8 @@
 """Free-only model failover for Nimi.
 
-Gemini is always primary. OpenRouter is optional and hard-pinned to the
-openrouter/free alias. Streaming responses are passed through live; failover
-is attempted only if a provider fails before it emits its first chunk.
+Gemini is the default. Ollama Cloud and OpenRouter Free are optional selectable
+providers and automatic fallbacks. Streaming responses are passed through live;
+failover is attempted only if a provider fails before its first chunk.
 """
 from __future__ import annotations
 
