@@ -26,6 +26,13 @@ class RequestRoutingTests(unittest.TestCase):
     def test_file_creation_selects_file_tool(self):
         self.assertEqual(select_relevant_tools("Create a PDF report about solar energy", ALL), {"create_file"})
 
+    def test_multimodal_message_text_is_classified(self):
+        message = [{"type": "text", "text": "Find the latest weather forecast"}, {"type": "image_url"}]
+        self.assertEqual(select_relevant_tools(message, ALL), {"web_search", "get_weather"})
+
+    def test_recent_event_language_selects_search(self):
+        self.assertEqual(select_relevant_tools("Who won the match last night?", ALL), {"web_search"})
+
     def test_agent_allowlist_is_always_enforced(self):
         self.assertEqual(select_relevant_tools("Research the latest news", {"calculate"}), frozenset())
 
