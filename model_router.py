@@ -29,6 +29,56 @@ class ModelTarget:
     model: str
 
 
+def provider_error_details(error: Exception) -> str:
+    """Return bounded provider diagnostics without logging credentials."""
+    status = getattr(error, "status_code", None)
+    body = getattr(error, "body", None)
+    message = ""
+
+    if isinstance(body, dict):
+        detail = body.get("error", body)
+        if isinstance(detail, dict):
+            message = str(
+                detail.get("message")
+                or detail.get("detail")
+                or detail.get("code")
+                or detail.get("type")
+                or ""
+            )
+        elif isinstance(detail, str):
+            message = detail
+    if not message:
+        message = str(getattr(error, "message", "") or "")
+
+    # Provider error text is untrusted. Redact common credential formats and
+    # credential-labelled values before putting a short excerpt in application logs.
+    import re
+
+    message = re.sub(
+        r"(?i)\\bBearer\\s+[A-Za-z0-9._~+/-]+=*",
+        "Bearer [REDACTED]",
+        message,
+    )
+    message = re.sub(
+        r"(?i)\\b(api[_-]?key|access[_-]?token|authorization)\\s*[:=]\\s*[^\\s,;]+",
+        r"\\1=[REDACTED]",
+        message,
+    )
+    message = re.sub(
+        r"\\b(?:sk|rk|or|ollama)[_-][A-Za-z0-9_-]{8,}\\b",
+        "[REDACTED]",
+        message,
+        flags=re.IGNORECASE,
+    )
+    message = " ".join(message.split())[:240]
+    parts = []
+    if status is not None:
+        parts.append(f"status={status}")
+    if message:
+        parts.append(f"provider_message={message!r}")
+    return " ".join(parts) if parts else f"error_type={type(error).__name__}"
+
+
 def is_retryable_provider_error(error: Exception) -> bool:
     """Only fail over for temporary capacity, network, or server errors."""
     status = getattr(error, "status_code", None)
@@ -149,7 +199,7 @@ class ModelRouter:
                 self._record_provider_failure(target, error)
                 print(
                     "model provider temporarily unavailable; trying next free route:",
-                    target.name, type(error).__name__, flush=True
+                    target.name, provider_error_details(error), flush=True
                 )
         if last_error is not None:
             raise last_error
@@ -209,13 +259,14 @@ class ModelRouter:
                 if emitted or not is_retryable_provider_error(error):
                     print(
                         f"model stream failed: {target.name} after {elapsed:.2f}s "
-                        f"({type(error).__name__})",
+                        f"({type(error).__name__}; {provider_error_details(error)})",
                         flush=True,
                     )
                     raise
                 print(
                     f"model provider unavailable before first chunk: {target.name} "
-                    f"after {elapsed:.2f}s ({type(error).__name__}); trying next free route",
+                    f"after {elapsed:.2f}s ({type(error).__name__}; "
+                    f"{provider_error_details(error)}); trying next free route",
                     flush=True,
                 )
         if last_error is not None:
