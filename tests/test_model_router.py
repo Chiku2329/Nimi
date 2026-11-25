@@ -25,6 +25,18 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
         )
         return client
 
+    async def test_manually_selected_ollama_is_first(self):
+        gemini = self.make_client([object()])
+        ollama = self.make_client([object()])
+        router = ModelRouter(gemini, ollama_client=ollama)
+        self.assertEqual(router.targets("deepseek-v4.1-flash")[0].model, "deepseek-v4.1-flash")
+
+    async def test_manually_selected_openrouter_is_first(self):
+        gemini = self.make_client([object()])
+        openrouter = self.make_client([object()])
+        router = ModelRouter(gemini, openrouter_client=openrouter)
+        self.assertEqual(router.targets(OPENROUTER_FREE_MODEL)[0].model, OPENROUTER_FREE_MODEL)
+
     async def test_primary_gemini_flash_is_first_by_default(self):
         gemini = self.make_client([RuntimeError("unused")])
         router = ModelRouter(gemini)
