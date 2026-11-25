@@ -38,8 +38,9 @@ client = AsyncOpenAI(
 )
 
 MODEL_OPTION_TO_ID = {
-    "Gemini Flash Latest": "gemini-flash-latest",
+    # Flash-Lite is the responsive default; Flash remains available as an option.
     "Gemini Flash-Lite Latest": "gemini-flash-lite-latest",
+    "Gemini Flash Latest": "gemini-flash-latest",
 }
 if os.environ.get("ZAI_API_KEY", "").strip():
     MODEL_OPTION_TO_ID["Z.AI — GLM-4.7-Flash (free)"] = "glm-4.7-flash"
