@@ -50,7 +50,7 @@ model_router = ModelRouter(
     client,
     openrouter_api_key=os.environ.get("OPENROUTER_API_KEY"),
     ollama_api_key=os.environ.get("OLLAMA_API_KEY"),
-    ollama_model=os.environ.get("OLLAMA_MODEL", "gemma4:31b"),
+    ollama_model=os.environ.get("OLLAMA_MODEL", "deepseek-v4.1-flash"),
 )
 DATA_DIR = resolve_data_dir()
 os.environ.setdefault("NIMI_STORAGE_DIR", os.path.join(DATA_DIR, "elements"))
