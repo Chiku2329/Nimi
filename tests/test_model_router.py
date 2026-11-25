@@ -49,14 +49,14 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
             gemini,
             openrouter_client=openrouter,
             ollama_client=ollama,
-            ollama_model="gemma4:31b",
+            ollama_model="deepseek-v4.1-flash",
         )
         result, route = await router.create_completion(messages=[])
         self.assertIs(result, response)
         self.assertEqual(route, "Ollama Cloud fallback")
         self.assertEqual(
             ollama.chat.completions.create.await_args.kwargs["model"],
-            "gemma4:31b",
+            "deepseek-v4.1-flash",
         )
         self.assertEqual(openrouter.chat.completions.create.await_count, 0)
 
@@ -82,7 +82,7 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
     async def test_optional_fallbacks_are_not_configured_without_keys(self):
         router = ModelRouter(self.make_client([]))
         self.assertEqual(len(router.targets()), 2)
-        self.assertEqual(OLLAMA_DEFAULT_MODEL, "gemma4:31b")
+        self.assertEqual(OLLAMA_DEFAULT_MODEL, "deepseek-v4.1-flash")
 
     async def test_authentication_error_does_not_trigger_fallback(self):
         gemini = self.make_client([ProviderError(401)])
