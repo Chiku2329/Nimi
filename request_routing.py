@@ -13,6 +13,11 @@ def select_relevant_tools(user_text: str, allowed_tools) -> frozenset[str]:
     weather, time, arithmetic, memory and file intents are detected separately.
     The server-side agent allowlist remains authoritative.
     """
+    if isinstance(user_text, list):
+        user_text = " ".join(
+            part.get("text", "") for part in user_text
+            if isinstance(part, dict) and isinstance(part.get("text"), str)
+        )
     if not isinstance(user_text, str):
         return frozenset()
     text = user_text.strip().lower()
