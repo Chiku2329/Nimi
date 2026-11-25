@@ -33,9 +33,9 @@ def select_relevant_tools(user_text: str, allowed_tools) -> frozenset[str]:
     if re.search(r"\b(time in|current time|local time|what time|tell me the time|time zone|timezone)\b", text):
         selected.add("get_time")
     if re.search(
-        r"\b(search the web|web search|look up|find sources|cite sources|"
+        r"\b(search the web|web search|search for|look up|find me|find sources|cite sources|"
         r"latest|today|currently|current news|headlines|recent news|research|"
-        r"compare sources|verify this|fact.?check|price today)\b",
+        r"compare sources|verify this|fact.?check|price today|yesterday|last night|this week|this month|this year|upcoming|schedule|scores|results|exchange rate|stock price|election results|release date|as of)\b",
         text,
     ):
         selected.add("web_search")
