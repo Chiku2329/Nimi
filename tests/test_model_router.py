@@ -70,10 +70,10 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(openrouter.chat.completions.create.await_count, 0)
 
-    async def test_payment_required_provider_error_fails_over_to_next_free_route(self):
+    async def test_ollama_is_not_used_as_an_automatic_fallback(self):
         response = object()
         gemini = self.make_client([ProviderError(429), ProviderError(503)])
-        ollama = self.make_client([ProviderError(402)])
+        ollama = self.make_client([object()])
         openrouter = self.make_client([response])
         router = ModelRouter(
             gemini, ollama_client=ollama, openrouter_client=openrouter
@@ -81,6 +81,7 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
         result, route = await router.create_completion(messages=[])
         self.assertIs(result, response)
         self.assertEqual(route, "OpenRouter Free")
+        self.assertEqual(ollama.chat.completions.create.await_count, 0)
 
     async def test_manually_selected_openrouter_is_first(self):
         gemini = self.make_client([object()])
@@ -103,27 +104,18 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("gemini-flash-lite-latest", route)
         self.assertEqual(gemini.chat.completions.create.await_count, 2)
 
-    async def test_ollama_is_used_after_gemini_and_before_openrouter(self):
+    async def test_manually_selected_ollama_is_used_when_requested(self):
         response = object()
-        gemini = self.make_client([ProviderError(429), ProviderError(503)])
+        gemini = self.make_client([object()])
         ollama = self.make_client([response])
-        openrouter = self.make_client([object()])
-        router = ModelRouter(
-            gemini,
-            openrouter_client=openrouter,
-            ollama_client=ollama,
-            ollama_model="deepseek-v4.1-flash",
+        router = ModelRouter(gemini, ollama_client=ollama)
+        result, route = await router.create_completion(
+            model=OLLAMA_DEFAULT_MODEL, messages=[]
         )
-        result, route = await router.create_completion(messages=[])
         self.assertIs(result, response)
         self.assertEqual(route, "Ollama Cloud (DeepSeek V4.1 Flash)")
-        self.assertEqual(
-            ollama.chat.completions.create.await_args.kwargs["model"],
-            "deepseek-v4.1-flash",
-        )
-        self.assertEqual(openrouter.chat.completions.create.await_count, 0)
 
-    async def test_openrouter_is_used_only_after_both_gemini_and_ollama_fail(self):
+    async def test_openrouter_is_used_after_gemini_routes_fail_without_ollama(self):
         response = object()
         gemini = self.make_client([ProviderError(429), ProviderError(503)])
         ollama = self.make_client([ProviderError(503)])
@@ -135,7 +127,7 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
         self.assertIs(result, response)
         self.assertEqual(route, "OpenRouter Free")
         self.assertEqual(
-            ollama.chat.completions.create.await_count, 1
+            ollama.chat.completions.create.await_count, 0
         )
         self.assertEqual(
             openrouter.chat.completions.create.await_args.kwargs["model"],
@@ -164,7 +156,7 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
         model_ids = [target.model for target in router.targets("paid-model-name")]
         self.assertEqual(
             model_ids,
-            [*GEMINI_MODELS, OLLAMA_DEFAULT_MODEL, OPENROUTER_FREE_MODEL],
+            [*GEMINI_MODELS, OPENROUTER_FREE_MODEL],
         )
         self.assertNotIn("paid-model-name", model_ids)
 
