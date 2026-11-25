@@ -202,20 +202,24 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
         with patch("model_router.time.monotonic", return_value=1121.0):
             self.assertEqual(router.targets()[0].model, "gemini-flash-latest")
 
-    async def test_first_chunk_deadline_fails_over_from_stalled_gemini(self):
+    async def test_first_chunk_deadline_fails_over_to_openrouter_not_ollama(self):
         gemini = self.make_client([DelayedStream(0.05), DelayedStream(0.05)])
         ollama = self.make_client([DelayedStream(0)])
-        router = ModelRouter(gemini, ollama_client=ollama)
+        openrouter = self.make_client([DelayedStream(0)])
+        router = ModelRouter(
+            gemini, ollama_client=ollama, openrouter_client=openrouter
+        )
         router.first_chunk_timeout_seconds["gemini-flash-latest"] = 0.001
         router.first_chunk_timeout_seconds["gemini-flash-lite-latest"] = 0.001
-        router.first_chunk_timeout_seconds[OLLAMA_DEFAULT_MODEL] = 0.1
+        router.first_chunk_timeout_seconds[OPENROUTER_FREE_MODEL] = 0.1
 
         received_routes = []
         async for _, route in router.stream_completion(messages=[]):
             received_routes.append(route)
 
-        self.assertEqual(received_routes, ["Ollama Cloud (DeepSeek V4.1 Flash)"])
-        self.assertEqual(ollama.chat.completions.create.await_count, 1)
+        self.assertEqual(received_routes, ["OpenRouter Free"])
+        self.assertEqual(ollama.chat.completions.create.await_count, 0)
+        self.assertEqual(openrouter.chat.completions.create.await_count, 1)
 
     async def test_primary_timeout_is_shortened_when_client_supports_options(self):
         gemini = self.make_client([])
