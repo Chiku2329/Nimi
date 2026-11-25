@@ -176,6 +176,11 @@ class ModelRouter:
                     )
                 except StopAsyncIteration:
                     return
+                except asyncio.TimeoutError:
+                    close_stream = getattr(stream, "aclose", None)
+                    if callable(close_stream):
+                        await close_stream()
+                    raise
                 elapsed = time.perf_counter() - started_at
                 print(
                     f"model first chunk: {target.name} after {elapsed:.2f}s",
