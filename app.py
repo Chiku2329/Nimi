@@ -1,9 +1,7 @@
-import ast
 import asyncio
 import base64
 import json
 import math
-import operator
 import os
 import sqlite3
 from datetime import datetime, timezone
@@ -17,6 +15,7 @@ from chainlit.input_widget import Select, Slider, Switch
 from chainlit.types import ThreadDict
 from openai import AsyncOpenAI
 from model_router import ModelRouter
+from math_utils import calculate_expression, extract_arithmetic_expression
 from uploads import UploadRejected, validate_upload_batch
 from file_creation import FileCreationRejected, create_file
 from guest_auth import guest_identifier_from_cookie
@@ -36,7 +35,15 @@ client = AsyncOpenAI(
     max_retries=0,
 )
 
-MODELS = ["gemini-flash-latest", "gemini-flash-lite-latest"]
+MODEL_OPTION_TO_ID = {
+    "Gemini Flash Latest": "gemini-flash-latest",
+    "Gemini Flash-Lite Latest": "gemini-flash-lite-latest",
+}
+if os.environ.get("OLLAMA_API_KEY", "").strip():
+    MODEL_OPTION_TO_ID["Ollama Cloud — DeepSeek V4.1 Flash (chat only)"] = "deepseek-v4.1-flash"
+if os.environ.get("OPENROUTER_API_KEY", "").strip():
+    MODEL_OPTION_TO_ID["OpenRouter Free"] = "openrouter/free"
+MODELS = list(MODEL_OPTION_TO_ID.values())
 MAX_FILE_CHARS = 30000
 MAX_HISTORY = 20
 MAX_TOOL_ROUNDS = 3
@@ -279,46 +286,9 @@ def set_memories(items):
 
 # ---------- tools ----------
 
-OPS = {
-    ast.Add: operator.add, ast.Sub: operator.sub, ast.Mult: operator.mul,
-    ast.Div: operator.truediv, ast.Pow: operator.pow, ast.Mod: operator.mod,
-    ast.FloorDiv: operator.floordiv,
-}
-FUNCS = {
-    "sqrt": math.sqrt, "sin": math.sin, "cos": math.cos, "tan": math.tan,
-    "log": math.log, "log10": math.log10, "abs": abs, "round": round,
-}
-CONSTS = {"pi": math.pi, "e": math.e}
-
-
-def _eval(node):
-    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
-        return node.value
-    if isinstance(node, ast.BinOp) and type(node.op) in OPS:
-        left, right = _eval(node.left), _eval(node.right)
-        if isinstance(node.op, ast.Pow) and abs(right) > 1000:
-            raise ValueError("exponent too large")
-        return OPS[type(node.op)](left, right)
-    if isinstance(node, ast.UnaryOp) and isinstance(node.op, (ast.USub, ast.UAdd)):
-        v = _eval(node.operand)
-        return -v if isinstance(node.op, ast.USub) else v
-    if isinstance(node, ast.Name) and node.id in CONSTS:
-        return CONSTS[node.id]
-    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id in FUNCS:
-        return FUNCS[node.func.id](*[_eval(a) for a in node.args])
-    raise ValueError("unsupported expression")
-
-
 def calculate(expression: str):
-    if not isinstance(expression, str) or len(expression) > 256:
-        raise ValueError("expression too long")
-    tree = ast.parse(expression.replace("^", "**"), mode="eval")
-    if sum(1 for _ in ast.walk(tree)) > 80:
-        raise ValueError("expression too complex")
-    result = _eval(tree.body)
-    if isinstance(result, (int, float)) and (not math.isfinite(result) or abs(result) > 1e100):
-        raise ValueError("result out of range")
-    return str(result)
+    """Evaluate a bounded arithmetic expression using the shared safe evaluator."""
+    return calculate_expression(expression)
 
 
 def get_time(timezone_name: str):
@@ -523,6 +493,9 @@ def normalize_settings(settings):
     """Treat browser-provided chat settings as untrusted input."""
     settings = settings if isinstance(settings, dict) else {}
     model = settings.get("model")
+    # The browser sends the visible option label; accept internal IDs too for
+    # resumed sessions and older clients.
+    model = MODEL_OPTION_TO_ID.get(model, model)
     if model not in MODELS:
         model = MODELS[0]
     try:
@@ -540,7 +513,7 @@ def normalize_settings(settings):
 async def setup_settings():
     settings = await cl.ChatSettings(
         [
-            Select(id="model", label="Model", values=MODELS, initial_index=0),
+            Select(id="model", label="Model", values=list(MODEL_OPTION_TO_ID), initial_index=0),
             Slider(id="temperature", label="Creativity", initial=0.7,
                    min=0, max=1.5, step=0.1),
             Switch(id="tools", label="Web search & tools", initial=True),
@@ -593,11 +566,20 @@ async def auto_title(first_text, persisted_user_id=None):
 
 
 async def generate(work, settings, reply, allowed_tools):
+    # Ollama Cloud's direct API does not support Nimi's multi-turn tool-result
+    # replay protocol. Keep that selection chat-only; deterministic arithmetic
+    # is handled locally before this function is called.
+    supports_tool_replay = settings.get("model") != "deepseek-v4.1-flash"
     available_tools = [
-        tool for tool in TOOLS if tool["function"]["name"] in allowed_tools
+        tool for tool in TOOLS
+        if supports_tool_replay and tool["function"]["name"] in allowed_tools
     ]
     for round_no in range(MAX_TOOL_ROUNDS + 1):
-        use_tools = settings.get("tools", True) and round_no < MAX_TOOL_ROUNDS
+        use_tools = (
+            supports_tool_replay
+            and settings.get("tools", True)
+            and round_no < MAX_TOOL_ROUNDS
+        )
         kwargs = dict(
             model=settings["model"],
             temperature=settings["temperature"],
@@ -797,7 +779,15 @@ async def main(message: cl.Message):
     cl.user_session.set("generated_files", [])
     reply = cl.Message(content="")
     try:
-        await generate(work, settings, reply, allowed_tools)
+        # Deterministic arithmetic should not depend on model tool-calling.
+        # This keeps simple calculations instant and avoids provider-specific
+        # malformed tool-call failures (for example, "multiply 25 by 4").
+        math_expression = extract_arithmetic_expression(user_text) if not uploads else None
+        if math_expression is not None:
+            reply.content = calculate(math_expression)
+            print("deterministic calculator handled arithmetic request", flush=True)
+        else:
+            await generate(work, settings, reply, allowed_tools)
     except Exception as e:
         print("chat generation failed:", type(e).__name__, flush=True)
         await cl.Message(content="Nimi encountered a temporary error. Please try again shortly.").send()

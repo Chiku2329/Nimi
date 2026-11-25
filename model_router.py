@@ -1,8 +1,8 @@
 """Free-only model failover for Nimi.
 
-Gemini is always primary. OpenRouter is optional and hard-pinned to the
-openrouter/free alias. Streaming responses are passed through live; failover
-is attempted only if a provider fails before it emits its first chunk.
+Gemini is the default. Ollama Cloud and OpenRouter Free are optional selectable
+providers and automatic fallbacks. Streaming responses are passed through live;
+failover is attempted only if a provider fails before its first chunk.
 """
 from __future__ import annotations
 
@@ -86,27 +86,32 @@ class ModelRouter:
             )
 
     def targets(self, preferred_model: str | None = None) -> list[ModelTarget]:
-        preferred = preferred_model if preferred_model in GEMINI_MODELS else GEMINI_MODELS[0]
-        order = (preferred,) + tuple(model for model in GEMINI_MODELS if model != preferred)
+        """Return configured providers, putting an explicitly selected model first."""
         cooling_down = time.monotonic() < self.primary_cooldown_until
-        if cooling_down:
-            order = tuple(model for model in order if model != GEMINI_MODELS[0])
         targets = [
             ModelTarget(
                 f"Google Gemini ({model})",
                 self.primary_client if model == GEMINI_MODELS[0] else self.gemini_client,
                 model,
             )
-            for model in order
+            for model in GEMINI_MODELS
+            if not (cooling_down and model == GEMINI_MODELS[0])
         ]
         if self.ollama_client is not None:
             targets.append(
-                ModelTarget("Ollama Cloud fallback", self.ollama_client, self.ollama_model)
+                ModelTarget("Ollama Cloud (DeepSeek V4.1 Flash)", self.ollama_client, self.ollama_model)
             )
         if self.openrouter_client is not None:
             targets.append(
-                ModelTarget("OpenRouter free fallback", self.openrouter_client, OPENROUTER_FREE_MODEL)
+                ModelTarget("OpenRouter Free", self.openrouter_client, OPENROUTER_FREE_MODEL)
             )
+
+        # A manual selection is the first choice, not merely a display setting.
+        # If it fails transiently, all other configured free routes remain eligible.
+        selected = next((target for target in targets if target.model == preferred_model), None)
+        if selected is not None:
+            targets.remove(selected)
+            targets.insert(0, selected)
         return targets
 
     def _record_provider_failure(self, target: ModelTarget, error: Exception) -> None:
