@@ -111,7 +111,7 @@ class ModelRouter:
         # A short timeout on the primary prevents a degraded Flash endpoint
         # from holding the user request for the full shared-client timeout.
         self.primary_client = (
-            gemini_client.with_options(timeout=4.0)
+            gemini_client.with_options(timeout=3.0)
             if callable(getattr(gemini_client, "with_options", None))
             else gemini_client
         )
@@ -158,7 +158,7 @@ class ModelRouter:
             self.openrouter_client = AsyncOpenAI(
                 api_key=key,
                 base_url=OPENROUTER_BASE_URL,
-                timeout=15.0,
+                timeout=5.0,
                 max_retries=0,
             )
 
