@@ -177,9 +177,15 @@ class ModelRouter:
                 except StopAsyncIteration:
                     return
                 except asyncio.TimeoutError:
-                    close_stream = getattr(stream, "aclose", None)
+                    close_stream = (
+                        getattr(stream, "close", None)
+                        or getattr(stream, "aclose", None)
+                    )
                     if callable(close_stream):
-                        await close_stream()
+                        try:
+                            await close_stream()
+                        except Exception:
+                            pass
                     raise
                 elapsed = time.perf_counter() - started_at
                 print(
