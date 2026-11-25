@@ -4,7 +4,8 @@
   var touchIcon = icon;
   var wordmark = "/public/nimi-logo.svg?v=6";
 
-  // Remove the branded startup cover only after the Chainlit chat shell is ready.
+  // The splash is a first-paint brand surface. Dismiss it as soon as the
+  // application main region mounts; do not wait for the composer/textarea.
   function dismissStartupBrandingWhenReady() {
     function start() {
       if (!document.body) return;
@@ -17,33 +18,19 @@
         observer.disconnect();
       }
       function check() {
-        if (document.querySelector("#root main") && document.querySelector("#root textarea")) finish();
+        var main = document.querySelector("#root main");
+        if (main && main.getBoundingClientRect().width > 0) finish();
       }
       observer.observe(document.documentElement, { childList: true, subtree: true });
       check();
-      // Safety release for login/error screens so the cover can never trap a visitor.
-      window.setTimeout(finish, 15000);
+      // Fail open on login/error pages; never leave the cover stuck.
+      window.setTimeout(finish, 8000);
     }
     if (document.body) start();
     else document.addEventListener("DOMContentLoaded", start, { once: true });
   }
   dismissStartupBrandingWhenReady();
 
-  function recoverStuckGuestAuth() {
-    if (window.location.pathname !== "/login/callback") return;
-    var params = new URLSearchParams(window.location.search);
-    if ((params.get("success") || "").toLowerCase() !== "true") return;
-    var key = "nimi_guest_auth_retry_at";
-    var now = Date.now();
-    try {
-      var previous = Number(window.sessionStorage.getItem(key) || 0);
-      if (previous && now - previous < 30000) return;
-      window.sessionStorage.setItem(key, String(now));
-    } catch (_) { return; }
-    window.setTimeout(function () {
-      if (window.location.pathname === "/login/callback") window.location.replace("/guest-auth");
-    }, 8000);
-  }
   recoverStuckGuestAuth();
 
   // Chainlit 2.12.0 uses React Dropzone for file uploads. Bridge native
@@ -123,12 +110,6 @@
     upsertLink("icon", icon, "image/svg+xml", "any");
     upsertLink("shortcut icon", icon, "image/svg+xml");
     upsertLink("apple-touch-icon", touchIcon, "image/svg+xml", "any");
-    document.querySelectorAll('img[alt="logo"], img.logo, header img').forEach(function (img) {
-      if (img.src.indexOf("/public/nimi-infinity.svg") === -1) {
-        img.src = icon;
-        img.alt = "Nimi";
-      }
-    });
   }
   setBrandIcons();
   new MutationObserver(setBrandIcons).observe(document.documentElement, {childList: true, subtree: true});
