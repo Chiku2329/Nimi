@@ -31,6 +31,22 @@
   }
   dismissStartupBrandingWhenReady();
 
+  function recoverStuckGuestAuth() {
+    if (window.location.pathname !== "/login/callback") return;
+    var params = new URLSearchParams(window.location.search);
+    if ((params.get("success") || "").toLowerCase() !== "true") return;
+    var key = "nimi_guest_auth_retry_at";
+    var now = Date.now();
+    try {
+      var previous = Number(window.sessionStorage.getItem(key) || 0);
+      if (previous && now - previous < 30000) return;
+      window.sessionStorage.setItem(key, String(now));
+    } catch (_) { return; }
+    window.setTimeout(function () {
+      if (window.location.pathname === "/login/callback") window.location.replace("/guest-auth");
+    }, 8000);
+  }
+
   recoverStuckGuestAuth();
 
   // Chainlit 2.12.0 uses React Dropzone for file uploads. Bridge native
