@@ -1,8 +1,33 @@
 (function () {
   "use strict";
-  var icon = "/public/nimi-infinity.svg?v=5";
+  var icon = "/public/nimi-infinity.svg?v=6";
   var touchIcon = icon;
-  var wordmark = "/public/nimi-logo.svg?v=5";
+  var wordmark = "/public/nimi-logo.svg?v=6";
+
+  // Remove the branded startup cover only after the Chainlit chat shell is ready.
+  function dismissStartupBrandingWhenReady() {
+    function start() {
+      if (!document.body) return;
+      var finished = false;
+      var observer = new MutationObserver(check);
+      function finish() {
+        if (finished) return;
+        finished = true;
+        document.body.classList.add("nimi-app-ready");
+        observer.disconnect();
+      }
+      function check() {
+        if (document.querySelector("#root main") && document.querySelector("#root textarea")) finish();
+      }
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+      check();
+      // Safety release for login/error screens so the cover can never trap a visitor.
+      window.setTimeout(finish, 15000);
+    }
+    if (document.body) start();
+    else document.addEventListener("DOMContentLoaded", start, { once: true });
+  }
+  dismissStartupBrandingWhenReady();
 
   function recoverStuckGuestAuth() {
     if (window.location.pathname !== "/login/callback") return;
@@ -110,7 +135,7 @@
 
   var manifestLink = document.querySelector('link[rel="manifest"]') || document.createElement("link");
   manifestLink.rel = "manifest";
-  manifestLink.href = "/public/manifest.json?v=5";
+  manifestLink.href = "/public/manifest.json?v=6";
   if (!manifestLink.isConnected) document.head.appendChild(manifestLink);
   [["theme-color", "#080b1b"], ["apple-mobile-web-app-capable", "yes"],
    ["apple-mobile-web-app-title", "Nimi"], ["mobile-web-app-capable", "yes"]].forEach(function (p) {

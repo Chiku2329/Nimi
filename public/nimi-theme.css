@@ -141,3 +141,29 @@ a {
     border-radius: 16px !important;
   }
 }
+
+/* Branded startup: show the complete Nimi mark before the chat app hydrates. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 99990;
+  pointer-events: none;
+  background-color: #080b1b;
+  background-image: url("/public/nimi-logo.svg?v=6");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: min(78vw, 520px) auto;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity .28s ease, visibility .28s ease;
+}
+
+body.nimi-app-ready::before {
+  opacity: 0;
+  visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before { transition: none; }
+}
