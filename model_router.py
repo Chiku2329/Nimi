@@ -16,6 +16,8 @@ from openai import AsyncOpenAI
 
 
 GEMINI_MODELS = ("gemini-flash-latest", "gemini-flash-lite-latest")
+OLLAMA_DEFAULT_MODEL = "gemma4:31b"
+OLLAMA_BASE_URL = "https://ollama.com/v1"
 OPENROUTER_FREE_MODEL = "openrouter/free"
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
@@ -41,13 +43,16 @@ def is_retryable_provider_error(error: Exception) -> bool:
 
 
 class ModelRouter:
-    """Gemini-first router with optional free-only OpenRouter fallback."""
+    """Gemini-first router with optional Ollama Cloud and free OpenRouter fallbacks."""
 
     def __init__(
         self,
         gemini_client: Any,
         openrouter_api_key: str | None = None,
         openrouter_client: Any | None = None,
+        ollama_api_key: str | None = None,
+        ollama_model: str = OLLAMA_DEFAULT_MODEL,
+        ollama_client: Any | None = None,
     ):
         self.gemini_client = gemini_client
         # A short timeout on the primary prevents a degraded Flash endpoint
@@ -59,6 +64,17 @@ class ModelRouter:
         )
         self.primary_cooldown_seconds = 120.0
         self.primary_cooldown_until = 0.0
+        self.ollama_client = ollama_client
+        ollama_key = (ollama_api_key or "").strip()
+        if ollama_key and self.ollama_client is None:
+            self.ollama_client = AsyncOpenAI(
+                api_key=ollama_key,
+                base_url=OLLAMA_BASE_URL,
+                timeout=45.0,
+                max_retries=0,
+            )
+        self.ollama_model = (ollama_model or OLLAMA_DEFAULT_MODEL).strip()
+
         self.openrouter_client = openrouter_client
         key = (openrouter_api_key or "").strip()
         if key and self.openrouter_client is None:
@@ -83,6 +99,10 @@ class ModelRouter:
             )
             for model in order
         ]
+        if self.ollama_client is not None:
+            targets.append(
+                ModelTarget("Ollama Cloud fallback", self.ollama_client, self.ollama_model)
+            )
         if self.openrouter_client is not None:
             targets.append(
                 ModelTarget("OpenRouter free fallback", self.openrouter_client, OPENROUTER_FREE_MODEL)
