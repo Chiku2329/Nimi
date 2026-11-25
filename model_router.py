@@ -55,17 +55,17 @@ def provider_error_details(error: Exception) -> str:
     import re
 
     message = re.sub(
-        r"(?i)\\bBearer\\s+[A-Za-z0-9._~+/-]+=*",
+        r"(?i)\bBearer\s+[A-Za-z0-9._~+/-]+=*",
         "Bearer [REDACTED]",
         message,
     )
     message = re.sub(
-        r"(?i)\\b(api[_-]?key|access[_-]?token|authorization)\\s*[:=]\\s*[^\\s,;]+",
-        r"\\1=[REDACTED]",
+        r"(?i)\b(api[_-]?key|access[_-]?token|authorization)\s*[:=]\s*[^\s,;]+",
+        r"\1=[REDACTED]",
         message,
     )
     message = re.sub(
-        r"\\b(?:sk|rk|or|ollama)[_-][A-Za-z0-9_-]{8,}\\b",
+        r"\b(?:sk|rk|or|ollama)[_-][A-Za-z0-9_-]{8,}\b",
         "[REDACTED]",
         message,
         flags=re.IGNORECASE,
