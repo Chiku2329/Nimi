@@ -16,6 +16,10 @@ class RequestRoutingTests(unittest.TestCase):
     def test_current_research_selects_search(self):
         self.assertEqual(select_relevant_tools("Research the latest AI news and cite sources", ALL), {"web_search"})
 
+    def test_explicit_search_and_time_intents_are_detected(self):
+        self.assertEqual(select_relevant_tools("Search for the best free Python course", ALL), {"web_search"})
+        self.assertEqual(select_relevant_tools("Tell me the time in Toronto", ALL), {"get_time"})
+
     def test_weather_selects_weather_tool(self):
         self.assertEqual(select_relevant_tools("Will it rain tomorrow? Give me the weather forecast", ALL), {"get_weather"})
 
