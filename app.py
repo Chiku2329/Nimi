@@ -595,6 +595,16 @@ async def generate(work, settings, reply, allowed_tools, user_intent=None):
         tool for tool in TOOLS
         if supports_tool_replay and tool["function"]["name"] in requested_tools
     ]
+    prompt_chars = sum(
+        len(str(item.get("content", ""))) for item in work
+    )
+    print(
+        "request routing:",
+        "tools=" + (",".join(sorted(requested_tools)) or "none"),
+        "history_messages=" + str(max(0, len(work) - 2)),
+        "prompt_chars=" + str(prompt_chars),
+        flush=True,
+    )
     for round_no in range(MAX_TOOL_ROUNDS + 1):
         use_tools = (
             supports_tool_replay
