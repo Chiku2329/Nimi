@@ -14,7 +14,7 @@ import httpx
 from openai import AsyncOpenAI
 
 
-GEMINI_MODELS = ("gemini-flash-latest", "gemini-flash-lite-latest")
+GEMINI_MODELS = ("gemini-flash-lite-latest", "gemini-flash-latest")
 ZAI_DEFAULT_MODEL = "glm-4.7-flash"
 ZAI_BASE_URL = "https://api.z.ai/api/paas/v4"
 OLLAMA_DEFAULT_MODEL = "deepseek-v4.1-flash"
@@ -111,18 +111,18 @@ class ModelRouter:
         # A short timeout on the primary prevents a degraded Flash endpoint
         # from holding the user request for the full shared-client timeout.
         self.primary_client = (
-            gemini_client.with_options(timeout=8.0)
+            gemini_client.with_options(timeout=4.0)
             if callable(getattr(gemini_client, "with_options", None))
             else gemini_client
         )
         self.primary_cooldown_seconds = 120.0
         self.primary_cooldown_until = 0.0
         self.first_chunk_timeout_seconds = {
-            "gemini-flash-latest": 8.0,
-            "gemini-flash-lite-latest": 10.0,
+            "gemini-flash-lite-latest": 2.5,
+            "gemini-flash-latest": 2.5,
             ZAI_DEFAULT_MODEL: 6.0,
             OLLAMA_DEFAULT_MODEL: 12.0,
-            OPENROUTER_FREE_MODEL: 12.0,
+            OPENROUTER_FREE_MODEL: 4.0,
         }
         self.zai_client = zai_client
         zai_key = (zai_api_key or "").strip()
@@ -168,7 +168,7 @@ class ModelRouter:
             for model in GEMINI_MODELS
             if not (cooling_down and model == GEMINI_MODELS[0])
         ]
-        if self.zai_client is not None:
+        if self.zai_client is not None and preferred_model == ZAI_DEFAULT_MODEL:
             targets.append(
                 ModelTarget("Z.AI (GLM-4.7-Flash)", self.zai_client, ZAI_DEFAULT_MODEL)
             )
