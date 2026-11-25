@@ -65,7 +65,7 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
         )
         result, route = await router.create_completion(messages=[])
         self.assertIs(result, response)
-        self.assertEqual(route, "Ollama Cloud fallback")
+        self.assertEqual(route, "Ollama Cloud (DeepSeek V4.1 Flash)")
         self.assertEqual(
             ollama.chat.completions.create.await_args.kwargs["model"],
             "deepseek-v4.1-flash",
@@ -82,7 +82,7 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
         )
         result, route = await router.create_completion(messages=[])
         self.assertIs(result, response)
-        self.assertEqual(route, "OpenRouter free fallback")
+        self.assertEqual(route, "OpenRouter Free")
         self.assertEqual(
             ollama.chat.completions.create.await_count, 1
         )
