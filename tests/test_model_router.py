@@ -55,20 +55,17 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
         router = ModelRouter(gemini, zai_client=zai)
         self.assertEqual(router.targets(ZAI_DEFAULT_MODEL)[0].model, ZAI_DEFAULT_MODEL)
 
-    async def test_zai_is_fallback_after_both_gemini_models(self):
+    async def test_zai_is_not_used_as_automatic_fallback(self):
         response = object()
         gemini = self.make_client([ProviderError(429), ProviderError(503)])
-        zai = self.make_client([response])
-        openrouter = self.make_client([object()])
+        zai = self.make_client([object()])
+        openrouter = self.make_client([response])
         router = ModelRouter(gemini, zai_client=zai, openrouter_client=openrouter)
         result, route = await router.create_completion(messages=[])
         self.assertIs(result, response)
-        self.assertEqual(route, "Z.AI (GLM-4.7-Flash)")
-        self.assertEqual(
-            zai.chat.completions.create.await_args.kwargs["model"],
-            ZAI_DEFAULT_MODEL,
-        )
-        self.assertEqual(openrouter.chat.completions.create.await_count, 0)
+        self.assertEqual(route, "OpenRouter Free")
+        self.assertEqual(zai.chat.completions.create.await_count, 0)
+        self.assertEqual(openrouter.chat.completions.create.await_count, 1)
 
     async def test_ollama_is_not_used_as_an_automatic_fallback(self):
         response = object()
@@ -92,16 +89,16 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
     async def test_primary_gemini_flash_is_first_by_default(self):
         gemini = self.make_client([RuntimeError("unused")])
         router = ModelRouter(gemini)
-        self.assertEqual(router.targets()[0].model, "gemini-flash-latest")
-        self.assertEqual(router.targets()[1].model, "gemini-flash-lite-latest")
+        self.assertEqual(router.targets()[0].model, "gemini-flash-lite-latest")
+        self.assertEqual(router.targets()[1].model, "gemini-flash-latest")
 
-    async def test_rate_limit_falls_back_to_flash_lite(self):
+    async def test_rate_limit_on_flash_lite_falls_back_to_flash(self):
         response = object()
         gemini = self.make_client([ProviderError(429), response])
         router = ModelRouter(gemini)
         result, route = await router.create_completion(messages=[])
         self.assertIs(result, response)
-        self.assertIn("gemini-flash-lite-latest", route)
+        self.assertIn("gemini-flash-latest", route)
         self.assertEqual(gemini.chat.completions.create.await_count, 2)
 
     async def test_manually_selected_ollama_is_used_when_requested(self):
@@ -227,8 +224,8 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
             chat=gemini.chat, timeout=kwargs["timeout"]
         )
         router = ModelRouter(gemini)
-        self.assertEqual(router.targets()[0].client.timeout, 8.0)
-        self.assertIs(router.targets()[1].client, gemini)
+        self.assertEqual(router.targets()[0].client.timeout, 4.0)
+        self.assertEqual(router.targets()[1].client.timeout, 4.0)
 
 
 if __name__ == "__main__":
