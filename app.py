@@ -28,6 +28,7 @@ from chat_titles import make_chat_title
 from untrusted_content import UNTRUSTED_CONTENT_INSTRUCTIONS, format_untrusted_attachment
 from tool_protocol import build_tool_exchange
 from research_sources import normalize_search_results
+from search_cache import WebSearchCache
 
 client = AsyncOpenAI(
     api_key=os.environ["API_KEY"],
@@ -308,13 +309,19 @@ def _search(query):
     return DDGS().text(query, max_results=5)
 
 
+search_cache = WebSearchCache()
+
+
 async def web_search(query: str):
-    try:
-        results = await asyncio.to_thread(_search, query)
-    except Exception as exc:
-        print("web search failed:", type(exc).__name__, flush=True)
-        return normalize_search_results([])
-    return normalize_search_results(results)
+    async def perform_search(search_query: str):
+        try:
+            results = await asyncio.to_thread(_search, search_query)
+        except Exception as exc:
+            print("web search failed:", type(exc).__name__, flush=True)
+            return normalize_search_results([])
+        return normalize_search_results(results)
+
+    return await search_cache.get_or_search(query, perform_search)
 
 async def get_weather(city: str):
     async with httpx.AsyncClient(timeout=15) as http:
