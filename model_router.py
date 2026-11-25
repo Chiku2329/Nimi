@@ -63,6 +63,12 @@ class ModelRouter:
             else gemini_client
         )
         self.primary_cooldown_seconds = 120.0
+        self.first_chunk_timeout_seconds = {
+            "gemini-flash-latest": 8.0,
+            "gemini-flash-lite-latest": 10.0,
+            self.ollama_model if hasattr(self, "ollama_model") else OLLAMA_DEFAULT_MODEL: 12.0,
+            OPENROUTER_FREE_MODEL: 12.0,
+        }
         self.primary_cooldown_until = 0.0
         self.ollama_client = ollama_client
         ollama_key = (ollama_api_key or "").strip()
@@ -70,10 +76,11 @@ class ModelRouter:
             self.ollama_client = AsyncOpenAI(
                 api_key=ollama_key,
                 base_url=OLLAMA_BASE_URL,
-                timeout=45.0,
+                timeout=15.0,
                 max_retries=0,
             )
         self.ollama_model = (ollama_model or OLLAMA_DEFAULT_MODEL).strip()
+        self.first_chunk_timeout_seconds[self.ollama_model] = 12.0
 
         self.openrouter_client = openrouter_client
         key = (openrouter_api_key or "").strip()
@@ -81,7 +88,7 @@ class ModelRouter:
             self.openrouter_client = AsyncOpenAI(
                 api_key=key,
                 base_url=OPENROUTER_BASE_URL,
-                timeout=60.0,
+                timeout=15.0,
                 max_retries=0,
             )
 
@@ -161,14 +168,22 @@ class ModelRouter:
                 stream = await target.client.chat.completions.create(
                     **params, model=target.model
                 )
-                async for chunk in stream:
-                    if not emitted:
-                        elapsed = time.perf_counter() - started_at
-                        print(
-                            f"model first chunk: {target.name} after {elapsed:.2f}s",
-                            flush=True,
-                        )
-                    emitted = True
+                iterator = stream.__aiter__()
+                try:
+                    first_chunk = await asyncio.wait_for(
+                        iterator.__anext__(),
+                        timeout=self.first_chunk_timeout_seconds.get(target.model, 12.0),
+                    )
+                except StopAsyncIteration:
+                    return
+                elapsed = time.perf_counter() - started_at
+                print(
+                    f"model first chunk: {target.name} after {elapsed:.2f}s",
+                    flush=True,
+                )
+                emitted = True
+                yield first_chunk, target.name
+                async for chunk in iterator:
                     yield chunk, target.name
                 return
             except Exception as error:
