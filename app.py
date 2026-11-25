@@ -4,6 +4,7 @@ import json
 import math
 import os
 import sqlite3
+import time
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -43,7 +44,7 @@ MODEL_OPTION_TO_ID = {
     "Gemini Flash Latest": "gemini-flash-latest",
 }
 if os.environ.get("ZAI_API_KEY", "").strip():
-    MODEL_OPTION_TO_ID["Z.AI — GLM-4.7-Flash (free)"] = "glm-4.7-flash"
+    MODEL_OPTION_TO_ID["Z.AI — GLM-4.7-Flash (manual)"] = "glm-4.7-flash"
 if os.environ.get("OLLAMA_API_KEY", "").strip():
     MODEL_OPTION_TO_ID["Ollama Cloud — DeepSeek V4.1 Flash (chat only)"] = "deepseek-v4.1-flash"
 if os.environ.get("OPENROUTER_API_KEY", "").strip():
@@ -760,6 +761,7 @@ async def handle_command(cmd, argument=""):
 
 @cl.on_message
 async def main(message: cl.Message):
+    request_started = time.perf_counter()
     try:
         if not await asyncio.to_thread(allow_chat_request, user_key()):
             await cl.Message(
@@ -859,6 +861,10 @@ async def main(message: cl.Message):
     if not reply.content:
         reply.content = "I didn't get a response. Please try again."
     await reply.send()
+    print(
+        f"chat completed in {time.perf_counter() - request_started:.2f}s",
+        flush=True,
+    )
     generated = cl.user_session.get("generated_files") or []
     if generated:
         elements = [
