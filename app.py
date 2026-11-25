@@ -50,11 +50,11 @@ if os.environ.get("OPENROUTER_API_KEY", "").strip():
     MODEL_OPTION_TO_ID["OpenRouter Free"] = "openrouter/free"
 MODELS = list(MODEL_OPTION_TO_ID.values())
 MAX_FILE_CHARS = 30000
-MAX_HISTORY = 12
-MAX_HISTORY_CHARS = 24000
+MAX_HISTORY = 8
+MAX_HISTORY_CHARS = 12000
 MAX_TOOL_ROUNDS = 3
 MAX_TOOL_CALLS_PER_ROUND = 3
-MAX_OUTPUT_TOKENS = 2048
+MAX_OUTPUT_TOKENS = 1536
 MAX_MESSAGE_CHARS = 20000
 
 # Gemini remains the primary provider. OpenRouter is optional and is hard-pinned
