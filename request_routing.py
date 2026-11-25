@@ -1,0 +1,50 @@
+"""Conservative per-request tool selection to reduce prompt overhead."""
+from __future__ import annotations
+
+import re
+
+from math_utils import extract_arithmetic_expression
+
+
+def select_relevant_tools(user_text: str, allowed_tools) -> frozenset[str]:
+    """Return only tools clearly relevant to the current user request.
+
+    Ambiguous/general questions deliberately get no tools; current-information,
+    weather, time, arithmetic, memory and file intents are detected separately.
+    The server-side agent allowlist remains authoritative.
+    """
+    if not isinstance(user_text, str):
+        return frozenset()
+    text = user_text.strip().lower()
+    if not text or len(text) > 20000:
+        return frozenset()
+
+    selected = set()
+    if extract_arithmetic_expression(text):
+        selected.add("calculate")
+
+    if re.search(r"\b(weather|forecast|temperature|rain|snow|wind speed)\b", text):
+        selected.add("get_weather")
+    if re.search(r"\b(time in|current time|local time|what time|time zone|timezone)\b", text):
+        selected.add("get_time")
+    if re.search(
+        r"\b(search the web|web search|look up|find sources|cite sources|"
+        r"latest|today|currently|current news|headlines|recent news|research|"
+        r"compare sources|verify this|fact.?check|price today)\b",
+        text,
+    ):
+        selected.add("web_search")
+    if re.search(r"\b(remember this|remember that|save this|save to memory|"
+                 r"remember for next time|don't forget)\b", text):
+        selected.add("remember")
+    if re.search(r"\b(forget|delete|remove).{0,40}\b(memory|memories|saved)\b", text):
+        selected.add("forget")
+    if re.search(
+        r"\b(create|make|generate|prepare|export)\b.{0,80}\b("
+        r"pdf|docx|word document|xlsx|spreadsheet|excel|pptx|powerpoint|"
+        r"csv|text file|markdown file|json file)\b",
+        text,
+    ):
+        selected.add("create_file")
+
+    return frozenset(selected.intersection(allowed_tools))
