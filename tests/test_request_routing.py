@@ -13,6 +13,10 @@ class RequestRoutingTests(unittest.TestCase):
     def test_arithmetic_selects_calculator(self):
         self.assertEqual(select_relevant_tools("multiply 25 by 4", ALL), {"calculate"})
 
+    def test_complex_calculation_selects_calculator(self):
+        self.assertEqual(select_relevant_tools("Calculate sqrt(25) + 3", ALL), {"calculate"})
+        self.assertEqual(select_relevant_tools("What is 100 divided by 2 plus 5?", ALL), {"calculate"})
+
     def test_current_research_selects_search(self):
         self.assertEqual(select_relevant_tools("Research the latest AI news and cite sources", ALL), {"web_search"})
 
