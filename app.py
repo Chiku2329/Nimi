@@ -582,12 +582,15 @@ async def auto_title(first_text, persisted_user_id=None):
         print("auto-title update failed:", type(e).__name__, flush=True)
 
 
-async def generate(work, settings, reply, allowed_tools):
+async def generate(work, settings, reply, allowed_tools, user_intent=None):
     # Ollama Cloud's direct API does not support Nimi's multi-turn tool-result
     # replay protocol. Keep that selection chat-only; deterministic arithmetic
     # is handled locally before this function is called.
     supports_tool_replay = settings.get("model") != "deepseek-v4.1-flash"
-    requested_tools = select_relevant_tools(work[-1].get("content", ""), allowed_tools)
+    requested_tools = select_relevant_tools(
+        user_intent if isinstance(user_intent, str) else work[-1].get("content", ""),
+        allowed_tools,
+    )
     available_tools = [
         tool for tool in TOOLS
         if supports_tool_replay and tool["function"]["name"] in requested_tools
@@ -826,7 +829,7 @@ async def main(message: cl.Message):
             reply.content = calculate(math_expression)
             print("deterministic calculator handled arithmetic request", flush=True)
         else:
-            await generate(work, settings, reply, allowed_tools)
+            await generate(work, settings, reply, allowed_tools, user_intent=message.content)
     except Exception as e:
         print("chat generation failed:", type(e).__name__, flush=True)
         await cl.Message(content="Nimi encountered a temporary error. Please try again shortly.").send()
