@@ -16,6 +16,7 @@ from chainlit.types import ThreadDict
 from openai import AsyncOpenAI
 from model_router import ModelRouter
 from math_utils import calculate_expression, extract_arithmetic_expression
+from request_routing import select_relevant_tools
 from uploads import UploadRejected, validate_upload_batch
 from file_creation import FileCreationRejected, create_file
 from guest_auth import guest_identifier_from_cookie
@@ -45,7 +46,8 @@ if os.environ.get("OPENROUTER_API_KEY", "").strip():
     MODEL_OPTION_TO_ID["OpenRouter Free"] = "openrouter/free"
 MODELS = list(MODEL_OPTION_TO_ID.values())
 MAX_FILE_CHARS = 30000
-MAX_HISTORY = 20
+MAX_HISTORY = 12
+MAX_HISTORY_CHARS = 24000
 MAX_TOOL_ROUNDS = 3
 MAX_TOOL_CALLS_PER_ROUND = 3
 MAX_OUTPUT_TOKENS = 2048
@@ -489,6 +491,19 @@ async def build_system_prompt():
     return "\n\n".join(p for p in parts if p)
 
 
+def trim_history(history, max_messages=MAX_HISTORY, max_chars=MAX_HISTORY_CHARS):
+    """Keep recent conversational context within message and character budgets."""
+    recent = list(history[-max_messages:])
+    while len(recent) > 2 and sum(
+        len(str(item.get("content", ""))) for item in recent
+    ) > max_chars:
+        recent.pop(0)
+        # Keep history aligned to user/assistant turn boundaries.
+        if recent and recent[0].get("role") == "assistant":
+            recent.pop(0)
+    return recent
+
+
 def normalize_settings(settings):
     """Treat browser-provided chat settings as untrusted input."""
     settings = settings if isinstance(settings, dict) else {}
@@ -570,9 +585,10 @@ async def generate(work, settings, reply, allowed_tools):
     # replay protocol. Keep that selection chat-only; deterministic arithmetic
     # is handled locally before this function is called.
     supports_tool_replay = settings.get("model") != "deepseek-v4.1-flash"
+    requested_tools = select_relevant_tools(work[-1].get("content", ""), allowed_tools)
     available_tools = [
         tool for tool in TOOLS
-        if supports_tool_replay and tool["function"]["name"] in allowed_tools
+        if supports_tool_replay and tool["function"]["name"] in requested_tools
     ]
     for round_no in range(MAX_TOOL_ROUNDS + 1):
         use_tools = (
@@ -616,17 +632,36 @@ async def generate(work, settings, reply, allowed_tools):
             return
 
         selected_calls = [calls[index] for index in sorted(calls)][:MAX_TOOL_CALLS_PER_ROUND]
-        results = []
+        parsed_calls = []
         for c in selected_calls:
             try:
                 args = json.loads(c["args"] or "{}")
             except Exception:
                 args = {}
-            async with cl.Step(name=c["name"], type="tool") as step:
-                step.input = json.dumps(args, ensure_ascii=False)
-                out = await run_tool(c["name"], args, allowed_tools)
-                step.output = out[:3000]
-            results.append(out[:6000])
+            parsed_calls.append((c, args))
+
+        read_only = {"web_search", "calculate", "get_weather", "get_time"}
+        if len(parsed_calls) > 1 and all(c["name"] in read_only for c, _ in parsed_calls):
+            # Independent read-only calls can overlap; preserve result order for
+            # the provider's tool-call exchange.
+            outputs = await asyncio.gather(*[
+                run_tool(c["name"], args, allowed_tools)
+                for c, args in parsed_calls
+            ])
+            results = []
+            for (c, args), out in zip(parsed_calls, outputs):
+                async with cl.Step(name=c["name"], type="tool") as step:
+                    step.input = json.dumps(args, ensure_ascii=False)
+                    step.output = str(out)[:3000]
+                results.append(str(out)[:6000])
+        else:
+            results = []
+            for c, args in parsed_calls:
+                async with cl.Step(name=c["name"], type="tool") as step:
+                    step.input = json.dumps(args, ensure_ascii=False)
+                    out = await run_tool(c["name"], args, allowed_tools)
+                    step.output = str(out)[:3000]
+                results.append(str(out)[:6000])
 
         # Preserve the provider's function-call IDs and return each result using
         # the standard tool role so multi-step calls remain well-formed.
@@ -655,7 +690,7 @@ async def on_chat_resume(thread: ThreadDict):
             history.append({"role": "user", "content": step["output"]})
         elif step["type"] == "assistant_message" and step.get("output"):
             history.append({"role": "assistant", "content": step["output"]})
-    cl.user_session.set("history", history[-MAX_HISTORY:])
+    cl.user_session.set("history", trim_history(history))
     cl.user_session.set("titled", True)
 
 
@@ -769,6 +804,8 @@ async def main(message: cl.Message):
         ).send()
         return
 
+    history = trim_history(history)
+    cl.user_session.set("history", history)
     work = [{"role": "system", "content": system_prompt}] + list(history)
     if image_parts:
         work.append({"role": "user",
@@ -813,7 +850,7 @@ async def main(message: cl.Message):
         stored += f"\n[Attached image(s): {', '.join(image_names)}]"
     history.append({"role": "user", "content": stored})
     history.append({"role": "assistant", "content": reply.content})
-    history[:] = history[-MAX_HISTORY:]
+    history[:] = trim_history(history)
 
     if not cl.user_session.get("titled"):
         cl.user_session.set("titled", True)
