@@ -236,7 +236,7 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
             chat=gemini.chat, timeout=kwargs["timeout"]
         )
         router = ModelRouter(gemini)
-        self.assertEqual(router.targets()[0].client.timeout, 4.0)
+        self.assertEqual(router.targets()[0].client.timeout, 3.0)
         self.assertEqual(router.targets()[1].client.timeout, 4.0)
 
 
