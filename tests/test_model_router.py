@@ -206,10 +206,10 @@ class ModelRouterTests(unittest.IsolatedAsyncioTestCase):
         router = ModelRouter(gemini)
         with patch("model_router.time.monotonic", return_value=1000.0):
             _, route = await router.create_completion(messages=[])
-            self.assertIn("gemini-flash-lite-latest", route)
-            self.assertEqual(router.targets()[0].model, "gemini-flash-lite-latest")
-        with patch("model_router.time.monotonic", return_value=1121.0):
+            self.assertIn("gemini-flash-latest", route)
             self.assertEqual(router.targets()[0].model, "gemini-flash-latest")
+        with patch("model_router.time.monotonic", return_value=1121.0):
+            self.assertEqual(router.targets()[0].model, "gemini-flash-lite-latest")
 
     async def test_first_chunk_deadline_fails_over_to_openrouter_not_ollama(self):
         gemini = self.make_client([DelayedStream(0.05), DelayedStream(0.05)])
