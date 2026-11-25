@@ -122,6 +122,7 @@ class ModelRouter:
         )
         self.primary_cooldown_seconds = 120.0
         self.primary_cooldown_until = 0.0
+        self.fallback_cooldown_until = 0.0
         self.first_chunk_timeout_seconds = {
             "gemini-flash-lite-latest": 2.5,
             "gemini-flash-latest": 2.5,
@@ -163,15 +164,18 @@ class ModelRouter:
 
     def targets(self, preferred_model: str | None = None) -> list[ModelTarget]:
         """Return configured providers, putting an explicitly selected model first."""
-        cooling_down = time.monotonic() < self.primary_cooldown_until
+        now = time.monotonic()
         targets = [
             ModelTarget(
                 f"Google Gemini ({model})",
                 self.primary_client if model == GEMINI_MODELS[0] else self.fallback_gemini_client,
                 model,
             )
-            for model in GEMINI_MODELS
-            if not (cooling_down and model == GEMINI_MODELS[0])
+            for index, model in enumerate(GEMINI_MODELS)
+            if not (
+                (index == 0 and now < self.primary_cooldown_until)
+                or (index == 1 and now < self.fallback_cooldown_until)
+            )
         ]
         if self.zai_client is not None and preferred_model == ZAI_DEFAULT_MODEL:
             targets.append(
@@ -195,8 +199,12 @@ class ModelRouter:
         return targets
 
     def _record_provider_failure(self, target: ModelTarget, error: Exception) -> None:
-        if target.model == GEMINI_MODELS[0] and is_retryable_provider_error(error):
-            self.primary_cooldown_until = time.monotonic() + self.primary_cooldown_seconds
+        if target.model in GEMINI_MODELS and is_retryable_provider_error(error):
+            cooldown_until = time.monotonic() + self.primary_cooldown_seconds
+            if target.model == GEMINI_MODELS[0]:
+                self.primary_cooldown_until = cooldown_until
+            else:
+                self.fallback_cooldown_until = cooldown_until
             print(
                 f"model circuit open: {target.name} for "
                 f"{self.primary_cooldown_seconds:.0f}s after {type(error).__name__}",
