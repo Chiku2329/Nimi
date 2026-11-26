@@ -4,27 +4,45 @@
   var touchIcon = icon;
   var wordmark = "/public/nimi-logo.svg?v=6";
 
-  // The splash is a first-paint brand surface. Dismiss it as soon as the
-  // application main region mounts; do not wait for the composer/textarea.
+  // Keep the branded cover brief. Dismiss it when the app shell appears,
+  // and fail open quickly if Chainlit's markup differs or startup is delayed.
   function dismissStartupBrandingWhenReady() {
     function start() {
       if (!document.body) return;
       var finished = false;
       var observer = new MutationObserver(check);
+      var resizeObserver = window.ResizeObserver ? new ResizeObserver(check) : null;
+      var root = document.getElementById("root");
+
       function finish() {
         if (finished) return;
         finished = true;
         document.body.classList.add("nimi-app-ready");
         observer.disconnect();
+        if (resizeObserver) resizeObserver.disconnect();
+        window.clearTimeout(fallbackTimer);
       }
       function check() {
-        var main = document.querySelector("#root main");
-        if (main && main.getBoundingClientRect().width > 0) finish();
+        var main = root && root.querySelector("main");
+        if (main && main.getBoundingClientRect().width > 0) {
+          finish();
+          return;
+        }
+        // Do not keep the whole page covered while the composer or history
+        // finishes hydrating; a mounted, visible React root is enough.
+        if (root && root.children.length > 0 && root.getBoundingClientRect().width > 0) finish();
       }
-      observer.observe(document.documentElement, { childList: true, subtree: true });
+
+      var fallbackTimer = window.setTimeout(finish, 900);
+      observer.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ["class", "style"]
+      });
+      if (resizeObserver && root) resizeObserver.observe(root);
       check();
-      // Fail open on login/error pages; never leave the cover stuck.
-      window.setTimeout(finish, 8000);
+      window.requestAnimationFrame(check);
     }
     if (document.body) start();
     else document.addEventListener("DOMContentLoaded", start, { once: true });
