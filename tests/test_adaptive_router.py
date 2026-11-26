@@ -39,6 +39,8 @@ def test_adaptive_order_prefers_consistently_faster_free_provider():
         router._record_provider_success(targets[GEMINI_MODELS[1]], 1.8)
 
     assert [target.model for target in router.targets()][0] == OPENROUTER_FREE_MODEL
+    # The default UI preference must not pin Flash-Lite and defeat adaptation.
+    assert [target.model for target in router.targets(GEMINI_MODELS[0])][0] == OPENROUTER_FREE_MODEL
 
 
 def test_manual_model_selection_remains_first():
