@@ -82,6 +82,27 @@ async def send_login_page_to_guest_auth(request: Request, call_next):
 
     # Add defensive browser headers to normal responses and redirects alike.
     response.headers.update(build_security_headers(is_https=request.url.scheme == "https"))
+
+    # Cache only public, versioned static assets. Auth, chat, memory, API and
+    # signed private-attachment responses are deliberately never cached here.
+    path = request.url.path
+    suffix = Path(path).suffix.lower()
+    public_static = path.startswith("/public/") and suffix in {
+        ".css", ".js", ".svg", ".png", ".jpg", ".jpeg", ".webp", ".woff", ".woff2"
+    }
+    hashed_bundle = (
+        path.startswith("/assets/")
+        and suffix in {".css", ".js", ".svg", ".woff", ".woff2"}
+        and any(len(part) >= 8 and all(c in "0123456789abcdef" for c in part.lower())
+                for part in Path(path).name.replace(".", "-").split("-"))
+    )
+    if public_static:
+        if request.query_params.get("v"):
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            response.headers["Cache-Control"] = "public, max-age=300"
+    elif hashed_bundle:
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
     return response
 
 
