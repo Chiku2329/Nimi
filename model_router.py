@@ -210,11 +210,17 @@ class ModelRouter:
             return (latency + failures * 2.5, rank)
         targets.sort(key=score)
 
-        # A manual selection remains first; other free routes are fallback.
-        selected = next((target for target in targets if target.model == preferred_model), None)
-        if selected is not None:
-            targets.remove(selected)
-            targets.insert(0, selected)
+        # Flash-Lite is the default preference, not a lock: let adaptive
+        # metrics choose among free automatic routes after enough samples.
+        # Any other explicit selection (Flash, OpenRouter, Z.AI, Ollama) stays
+        # first so the model selector continues to behave predictably.
+        if preferred_model != GEMINI_MODELS[0]:
+            selected = next(
+                (target for target in targets if target.model == preferred_model), None
+            )
+            if selected is not None:
+                targets.remove(selected)
+                targets.insert(0, selected)
         return targets
 
     def _record_provider_success(self, target: ModelTarget, first_token_seconds: float) -> None:
