@@ -123,6 +123,11 @@ class ModelRouter:
         self.primary_cooldown_seconds = 120.0
         self.primary_cooldown_until = 0.0
         self.fallback_cooldown_until = 0.0
+        # In-process adaptive stats. Never store prompts, guest IDs, or content.
+        self.provider_latency_ema: dict[str, float] = {}
+        self.provider_successes: dict[str, int] = {}
+        self.provider_failures: dict[str, int] = {}
+        self.latency_ema_alpha = 0.35
         self.first_chunk_timeout_seconds = {
             "gemini-flash-lite-latest": 2.5,
             "gemini-flash-latest": 2.5,
@@ -190,15 +195,43 @@ class ModelRouter:
                 ModelTarget("OpenRouter Free", self.openrouter_client, OPENROUTER_FREE_MODEL)
             )
 
-        # A manual selection is the first choice, not merely a display setting.
-        # If it fails transiently, all other configured free routes remain eligible.
+        # Adapt free-provider order from recent first-token latency. Keep the
+        # safe default order until a provider has at least two successful samples.
+        base_rank = {model: index for index, model in enumerate(
+            (*GEMINI_MODELS, OPENROUTER_FREE_MODEL)
+        )}
+        def score(target: ModelTarget) -> tuple[float, int]:
+            samples = self.provider_successes.get(target.model, 0)
+            rank = base_rank.get(target.model, 99)
+            if samples < 2:
+                return (float(rank), rank)
+            latency = self.provider_latency_ema.get(target.model, 8.0)
+            failures = self.provider_failures.get(target.model, 0)
+            return (latency + failures * 2.5, rank)
+        targets.sort(key=score)
+
+        # A manual selection remains first; other free routes are fallback.
         selected = next((target for target in targets if target.model == preferred_model), None)
         if selected is not None:
             targets.remove(selected)
             targets.insert(0, selected)
         return targets
 
+    def _record_provider_success(self, target: ModelTarget, first_token_seconds: float) -> None:
+        model = target.model
+        previous = self.provider_latency_ema.get(model)
+        alpha = self.latency_ema_alpha
+        self.provider_latency_ema[model] = (
+            first_token_seconds if previous is None
+            else alpha * first_token_seconds + (1.0 - alpha) * previous
+        )
+        self.provider_successes[model] = self.provider_successes.get(model, 0) + 1
+        self.provider_failures[model] = max(0, self.provider_failures.get(model, 0) - 1)
+
     def _record_provider_failure(self, target: ModelTarget, error: Exception) -> None:
+        self.provider_failures[target.model] = min(
+            8, self.provider_failures.get(target.model, 0) + 1
+        )
         if target.model in GEMINI_MODELS and is_retryable_provider_error(error):
             cooldown_until = time.monotonic() + self.primary_cooldown_seconds
             if target.model == GEMINI_MODELS[0]:
@@ -219,9 +252,11 @@ class ModelRouter:
         last_error: Exception | None = None
         for target in self.targets(preferred):
             try:
+                started = time.perf_counter()
                 response = await target.client.chat.completions.create(
                     **params, model=target.model
                 )
+                self._record_provider_success(target, time.perf_counter() - started)
                 return response, target.name
             except Exception as error:
                 last_error = error
@@ -273,6 +308,7 @@ class ModelRouter:
                             )
                     raise
                 elapsed = time.perf_counter() - started_at
+                self._record_provider_success(target, elapsed)
                 print(
                     f"model first chunk: {target.name} after {elapsed:.2f}s",
                     flush=True,
