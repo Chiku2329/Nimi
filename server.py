@@ -14,6 +14,7 @@ from chainlit_compat import apply_chat_profile_config_compat
 from response_security import build_security_headers
 from file_storage import attachment_media_type, get_storage_client
 from health import check_database_ready
+from static_asset_cache import cache_control_for_asset
 
 from guest_auth import (
     COOKIE_MAX_AGE,
@@ -83,26 +84,13 @@ async def send_login_page_to_guest_auth(request: Request, call_next):
     # Add defensive browser headers to normal responses and redirects alike.
     response.headers.update(build_security_headers(is_https=request.url.scheme == "https"))
 
-    # Cache only public, versioned static assets. Auth, chat, memory, API and
-    # signed private-attachment responses are deliberately never cached here.
-    path = request.url.path
-    suffix = Path(path).suffix.lower()
-    public_static = path.startswith("/public/") and suffix in {
-        ".css", ".js", ".svg", ".png", ".jpg", ".jpeg", ".webp", ".woff", ".woff2"
-    }
-    hashed_bundle = (
-        path.startswith("/assets/")
-        and suffix in {".css", ".js", ".svg", ".woff", ".woff2"}
-        and any(len(part) >= 8 and all(c in "0123456789abcdef" for c in part.lower())
-                for part in Path(path).name.replace(".", "-").split("-"))
+    # Apply caching only to public static files; private app/API data remains
+    # governed by its existing no-store security headers.
+    cache_policy = cache_control_for_asset(
+        request.url.path, versioned=bool(request.query_params.get("v"))
     )
-    if public_static:
-        if request.query_params.get("v"):
-            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
-        else:
-            response.headers["Cache-Control"] = "public, max-age=300"
-    elif hashed_bundle:
-        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    if cache_policy:
+        response.headers["Cache-Control"] = cache_policy
     return response
 
 
