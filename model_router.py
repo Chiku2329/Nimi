@@ -258,11 +258,9 @@ class ModelRouter:
         last_error: Exception | None = None
         for target in self.targets(preferred):
             try:
-                started = time.perf_counter()
                 response = await target.client.chat.completions.create(
                     **params, model=target.model
                 )
-                self._record_provider_success(target, time.perf_counter() - started)
                 return response, target.name
             except Exception as error:
                 last_error = error
