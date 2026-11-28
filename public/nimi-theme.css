@@ -83,6 +83,131 @@ textarea:focus {
   box-shadow: 0 0 0 1px rgba(155, 124, 255, .45) !important;
 }
 
+
+/* Premium composer: a calm floating panel with a clearly separated send action. */
+form:has(textarea) {
+  position: relative !important;
+  display: flex !important;
+  align-items: flex-end !important;
+  gap: 10px !important;
+  padding: 14px 14px 12px 18px !important;
+  min-height: 104px !important;
+  border: 1px solid rgba(166, 145, 230, .22) !important;
+  border-radius: 24px !important;
+  background: linear-gradient(145deg, rgba(27, 25, 44, .96), rgba(17, 20, 35, .97)) !important;
+  box-shadow: 0 14px 42px rgba(0, 0, 0, .20), inset 0 1px 0 rgba(255, 255, 255, .035) !important;
+  transition: border-color .2s ease, box-shadow .2s ease, background .2s ease !important;
+}
+
+form:has(textarea):focus-within {
+  border-color: rgba(155, 124, 255, .58) !important;
+  box-shadow: 0 16px 44px rgba(73, 47, 150, .18), 0 0 0 3px rgba(155, 124, 255, .07),
+              inset 0 1px 0 rgba(255, 255, 255, .045) !important;
+}
+
+form:has(textarea) textarea {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  min-height: 54px !important;
+  max-height: 220px !important;
+  margin: 0 !important;
+  padding: 12px 10px !important;
+  border: 0 !important;
+  border-radius: 14px !important;
+  outline: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: inherit !important;
+  line-height: 1.55 !important;
+  resize: none !important;
+}
+
+form:has(textarea) textarea:focus,
+form:has(textarea) textarea:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+form:has(textarea) button[type="submit"] {
+  flex: 0 0 44px !important;
+  width: 44px !important;
+  min-width: 44px !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  margin: 0 0 2px 0 !important;
+  padding: 0 !important;
+  border: 1px solid rgba(190, 171, 255, .30) !important;
+  border-radius: 50% !important;
+  background: linear-gradient(135deg, #9b7cff, #6e5cf6) !important;
+  color: #fff !important;
+  box-shadow: 0 5px 16px rgba(115, 83, 232, .30) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  align-self: flex-end !important;
+  transition: transform .16s ease, box-shadow .16s ease, filter .16s ease !important;
+}
+
+form:has(textarea) button[type="submit"]:hover {
+  transform: translateY(-1px) !important;
+  filter: brightness(1.06) !important;
+  box-shadow: 0 8px 20px rgba(115, 83, 232, .38) !important;
+}
+
+form:has(textarea) button[type="submit"]:active {
+  transform: translateY(0) scale(.96) !important;
+}
+
+form:has(textarea) button[type="submit"]:focus-visible {
+  outline: 2px solid rgba(183, 160, 255, .8) !important;
+  outline-offset: 3px !important;
+}
+
+form:has(textarea) button:not([type="submit"]) {
+  border-radius: 12px !important;
+}
+
+.dark form:has(textarea), [data-theme="dark"] form:has(textarea) {
+  background: linear-gradient(145deg, rgba(27, 25, 44, .97), rgba(13, 17, 31, .98)) !important;
+}
+
+.light form:has(textarea), [data-theme="light"] form:has(textarea) {
+  border-color: rgba(109, 83, 173, .20) !important;
+  background: linear-gradient(145deg, rgba(255, 255, 255, .98), rgba(248, 246, 255, .98)) !important;
+  box-shadow: 0 12px 32px rgba(46, 35, 82, .09), inset 0 1px 0 #fff !important;
+}
+
+.light form:has(textarea) button[type="submit"],
+[data-theme="light"] form:has(textarea) button[type="submit"] {
+  color: #fff !important;
+}
+
+@media (max-width: 768px) {
+  form:has(textarea) {
+    gap: 7px !important;
+    padding: 10px 10px 9px 12px !important;
+    min-height: 88px !important;
+    border-radius: 20px !important;
+  }
+  form:has(textarea) textarea {
+    min-height: 48px !important;
+    padding: 10px 6px !important;
+  }
+  form:has(textarea) button[type="submit"] {
+    flex-basis: 40px !important;
+    width: 40px !important;
+    min-width: 40px !important;
+    height: 40px !important;
+    min-height: 40px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  form:has(textarea), form:has(textarea) button[type="submit"] {
+    transition: none !important;
+  }
+}
+
 /* Uploads, tool cards and content panels. */
 [role="dialog"], [role="menu"], [data-radix-popper-content-wrapper] > div {
   border-radius: 14px !important;
