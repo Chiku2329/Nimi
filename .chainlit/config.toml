@@ -75,7 +75,7 @@ confirm_new_chat = true
 cot = "full"
 alert_style = "classic"
 default_avatar_file_url = "/public/nimi-infinity.svg?v=6"
-custom_css = "/public/nimi-theme.css?v=3"
+custom_css = "/public/nimi-theme.css?v=4"
 layout = "wide"
 
 [UI.theme]
