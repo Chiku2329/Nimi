@@ -67,6 +67,30 @@
 
   recoverStuckGuestAuth();
 
+  // Chainlit's composer is not guaranteed to be a <form>. Locate its
+  // actual input and send control, then tag their nearest shared container
+  // so our custom CSS targets the rendered UI rather than an assumed form.
+  function markNimiComposer() {
+    var input = document.getElementById("chat-input");
+    var send = document.getElementById("submit-button");
+    if (!input || !send) return;
+    var ancestor = input;
+    for (var depth = 0; ancestor && depth < 10; depth++, ancestor = ancestor.parentElement) {
+      if (ancestor.contains(send)) {
+        ancestor.classList.add("nimi-composer");
+        return;
+      }
+    }
+  }
+  function installComposerStylingHook() {
+    markNimiComposer();
+    var observer = new MutationObserver(markNimiComposer);
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    window.addEventListener("load", markNimiComposer, { once: true });
+    window.requestAnimationFrame(markNimiComposer);
+  }
+  installComposerStylingHook();
+
   // Chainlit 2.12.0 uses React Dropzone for file uploads. Bridge native
   // file-picker selections through the composer-level drop handler, which
   // is also used by drag-and-drop.
