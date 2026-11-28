@@ -67,20 +67,11 @@
 
   recoverStuckGuestAuth();
 
-  // Chainlit's composer is not guaranteed to be a <form>. Locate its
-  // actual input and send control, then tag their nearest shared container
-  // so our custom CSS targets the rendered UI rather than an assumed form.
+  // Chainlit 2.12 exposes the composer wrapper as #message-composer.
+  // Mark that stable element directly; button IDs differ across versions.
   function markNimiComposer() {
-    var input = document.getElementById("chat-input");
-    var send = document.getElementById("submit-button");
-    if (!input || !send) return;
-    var ancestor = input;
-    for (var depth = 0; ancestor && depth < 10; depth++, ancestor = ancestor.parentElement) {
-      if (ancestor.contains(send)) {
-        ancestor.classList.add("nimi-composer");
-        return;
-      }
-    }
+    var composer = document.getElementById("message-composer");
+    if (composer) composer.classList.add("nimi-composer");
   }
   function installComposerStylingHook() {
     markNimiComposer();
