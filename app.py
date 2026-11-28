@@ -700,12 +700,16 @@ async def generate(work, settings, reply, allowed_tools, user_intent=None):
 
 @cl.on_chat_start
 async def start():
-    await setup_settings()
+    # Initialize safe defaults and render the welcome message before the
+    # settings RPC. ChatSettings.send() may wait for the browser round-trip;
+    # it must not hold the first visible Nimi screen behind that handshake.
+    cl.user_session.set("settings", normalize_settings({}))
     cl.user_session.set("history", [])
     cl.user_session.set("titled", False)
     await cl.Message(
         content="# Nimi - One AI. Infinite Possibilities.\n\nYour AI companion for thinking, creating, learning and exploring."
     ).send()
+    await setup_settings()
 
 
 @cl.on_chat_resume
